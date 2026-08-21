@@ -51,6 +51,9 @@ export default function BriefPage() {
     phone: "",
   });
 
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [sending, setSending] = useState(false);
+
   const set = (field: keyof FormData, value: string | string[]) =>
     setForm((prev) => ({ ...prev, [field]: value }));
 
@@ -62,14 +65,25 @@ export default function BriefPage() {
 
   const submit = async () => {
     track("brief_complete");
+    setSubmitError(null);
+    setSending(true);
     try {
-      await fetch("/api/brief", {
+      const res = await fetch("/api/brief", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...form, submittedAt: new Date().toISOString() }),
       });
-    } catch {}
-    setSubmitted(true);
+      if (!res.ok) {
+        const data = (await res.json().catch(() => null)) as { error?: string } | null;
+        setSubmitError(data?.error ?? "Could not send the brief. Please try again or email me.");
+        return;
+      }
+      setSubmitted(true);
+    } catch {
+      setSubmitError("Network error. Please try again or email me.");
+    } finally {
+      setSending(false);
+    }
   };
 
   if (submitted) {
@@ -176,7 +190,13 @@ export default function BriefPage() {
           )}
         </div>
 
-        <div className="mt-10 flex gap-4">
+        <div className="mt-10 flex flex-col gap-4">
+          {submitError && (
+            <p className="text-sm text-red-700" role="alert">
+              {submitError}
+            </p>
+          )}
+          <div className="flex gap-4">
           {step > 0 && (
             <button
               type="button"
@@ -198,12 +218,13 @@ export default function BriefPage() {
             <button
               type="button"
               onClick={submit}
-              disabled={!form.name || !form.email}
+              disabled={!form.name || !form.email || sending}
               className="bg-text text-bg px-6 py-3 text-[0.75rem] font-semibold uppercase tracking-[0.12em] transition-transform hover:scale-[1.02] disabled:opacity-40"
             >
-              Send brief
+              {sending ? "Sending…" : "Send brief"}
             </button>
           )}
+          </div>
         </div>
       </div>
     </div>
