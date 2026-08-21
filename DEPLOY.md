@@ -177,10 +177,70 @@ certbot --nginx -d ДОМЕН -d www.ДОМЕН
 
 ---
 
-## Часть 5. Как обновлять сайт потом (2–3 команды)
+## Часть 5. Обновления: локальный пуш + автодеплой
 
-На Mac закоммить и запушь изменения в репозиторий.  
-На сервере:
+### 5.1. С Mac — одним скриптом
+
+Из корня проекта:
+
+```bash
+./push.sh "краткое сообщение коммита"
+```
+
+Скрипт сделает `git add` → `commit` → `push` в `main`.  
+После пуша GitHub Actions сам обновит сайт на VPS (см. 5.2).
+
+### 5.2. Автодеплой при пуше (один раз настроить)
+
+Workflow: `.github/workflows/deploy.yml` — по пушу в `main` заходит на сервер по SSH и выполняет: `git reset --hard` → `npm ci` → `build` → `pm2 restart`.
+
+#### На Mac: ключ только для деплоя
+
+```bash
+ssh-keygen -t ed25519 -C "github-actions-portfolio" -f ~/.ssh/portfolio_deploy -N ""
+```
+
+Публичный ключ на сервер (подставь свой IP/пользователя, если не `root`):
+
+```bash
+ssh-copy-id -i ~/.ssh/portfolio_deploy.pub root@IP
+```
+
+Или вручную: содержимое `~/.ssh/portfolio_deploy.pub` добавь одной строкой в `/root/.ssh/authorized_keys` на VPS.
+
+Проверка:
+
+```bash
+ssh -i ~/.ssh/portfolio_deploy root@IP "echo ok"
+```
+
+#### В GitHub → Settings → Secrets and variables → Actions
+
+Создай secrets:
+
+| Secret | Значение |
+|--------|----------|
+| `SSH_HOST` | IP сервера (например `204.168.196.245`) |
+| `SSH_USER` | `root` (или другой пользователь с доступом к `/var/www/arsenty-portfolio` и PM2) |
+| `SSH_PRIVATE_KEY` | **весь** файл `~/.ssh/portfolio_deploy` (приватный ключ, включая `BEGIN`/`END`) |
+
+Порт SSH в workflow — `22`. Если у тебя другой — поправь `port` в `.github/workflows/deploy.yml`.
+
+Приватный ключ в git **не** клади.
+
+#### На сервере: чтобы `git fetch` работал без вопросов
+
+Репозиторий публичный — достаточно HTTPS-remote (как после обычного `git clone`). Проверь:
+
+```bash
+cd /var/www/arsenty-portfolio
+git remote -v
+# origin  https://github.com/ArsentyStreltsov/portfolio.git
+```
+
+После первого пуша с workflow смотри вкладку **Actions** на GitHub.
+
+### 5.3. Ручной деплой на сервере (если Actions недоступен)
 
 ```bash
 cd /var/www/arsenty-portfolio
