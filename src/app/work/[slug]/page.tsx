@@ -1,7 +1,6 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { projects } from "@/data/projects";
-import { site } from "@/data/site";
 
 type Props = { params: Promise<{ slug: string }> };
 
@@ -12,10 +11,27 @@ export async function generateStaticParams() {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
   const project = projects.find((p) => p.slug === slug);
-  if (!project) return {};
+  if (!project) return { robots: { index: false, follow: false } };
+
+  const path = `/work/${project.slug}`;
+
   return {
-    title: `${project.title} — ${site.name}`,
+    title: project.title,
     description: project.description,
+    alternates: { canonical: path },
+    openGraph: {
+      title: project.title,
+      description: project.description,
+      url: path,
+      type: "article",
+      images: [{ url: project.coverImage, alt: `${project.title} cover` }],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: project.title,
+      description: project.description,
+      images: [project.coverImage],
+    },
   };
 }
 

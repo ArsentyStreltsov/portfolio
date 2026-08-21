@@ -98,6 +98,8 @@ NTFY_TOPIC=твой-секретный-топик-ntfy
 NEXT_PUBLIC_SITE_URL=https://ДОМЕН
 ```
 
+`NEXT_PUBLIC_SITE_URL` нужен для SEO (canonical, sitemap, Open Graph). Без него подставится `https://arsentystreltsov.com`.
+
 Сохрани: `Ctrl+O`, Enter, `Ctrl+X`.
 
 В приложении ntfy на телефоне подпишись на **тот же** топик.
@@ -260,7 +262,9 @@ pm2 restart portfolio
 - [ ] Главная, Portfolio, About, Process выглядят нормально
 - [ ] `/start` — форма уходит, на телефон приходит ntfy
 - [ ] После перезагрузки VPS сайт сам поднимается (`pm2 save` + `pm2 startup` уже сделаны)
-
+- [ ] `https://ДОМЕН/robots.txt` и `https://ДОМЕН/sitemap.xml` открываются
+- [ ] В `.env.production` задан `NEXT_PUBLIC_SITE_URL=https://ДОМЕН`
+- [ ] (опционально) Google Search Console → добавить домен → отправить sitemap
 Полезные команды:
 
 ```bash

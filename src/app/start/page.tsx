@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import type { Metadata } from "next";
 import { track } from "@/lib/analytics";
 
 const steps = [

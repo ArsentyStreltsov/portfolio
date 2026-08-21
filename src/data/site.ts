@@ -25,9 +25,8 @@ export const site = {
   ],
 
   seo: {
-    title: "Arsenty Streltsov — Web Design & Development for Small Businesses",
+    title: "Arsenty Streltsov",
     description:
       "Modern websites for small businesses — designed and built with a fast, clear and personal process.",
-    ogImage: "/og.png",
   },
 } as const;
