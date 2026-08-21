@@ -193,7 +193,3 @@ export const showreelProjects = showreelSlugs.map(
 
 /** Selected Work grid — all 9 (3×3) */
 export const selectedWorkProjects = projects;
-
-export function getProject(slug: string) {
-  return projects.find((p) => p.slug === slug);
-}
