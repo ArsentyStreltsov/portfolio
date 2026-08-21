@@ -30,4 +30,14 @@ jobs:
             npm run build
             pm2 restart portfolio
             pm2 save
-            curl -fsS -o /dev/null -w "%{http_code}\n" http://127.0.0.1:3000
+            for i in $(seq 1 30); do
+              if curl -fsS -o /dev/null http://127.0.0.1:3000; then
+                echo "Health check OK (attempt $i)"
+                exit 0
+              fi
+              echo "Waiting for app... ($i/30)"
+              sleep 2
+            done
+            echo "App did not become ready on :3000"
+            pm2 logs portfolio --lines 50 --nostream || true
+            exit 1
