@@ -1,8 +1,7 @@
 import { appendFile, mkdir } from "node:fs/promises";
 import path from "node:path";
 import { NextRequest, NextResponse } from "next/server";
-import { logEvent } from "@/lib/crm/leads";
-import { getDb } from "@/lib/crm/db";
+import { getLeadBusinessName, logEvent } from "@/lib/crm/leads";
 import { sendNtfy } from "@/lib/ntfy";
 import {
   sanitizeOutreachId,
@@ -64,7 +63,6 @@ export async function POST(request: NextRequest) {
 
     let businessName: string | undefined;
     try {
-      const db = getDb();
       logEvent({
         lead_id,
         touch_id: touch_id ?? null,
@@ -72,12 +70,9 @@ export async function POST(request: NextRequest) {
         summary: `Opened outreach link${entry.path !== "/" ? ` (${entry.path})` : ""}`,
         payload: entry,
       });
-      const leadRow = db
-        .prepare("SELECT business_name FROM leads WHERE lead_id = ?")
-        .get(lead_id) as { business_name: string } | undefined;
-      businessName = leadRow?.business_name;
+      businessName = getLeadBusinessName(lead_id);
     } catch {
-      // CRM optional if DB unavailable
+      // CRM storage best-effort
     }
 
     void sendNtfy({

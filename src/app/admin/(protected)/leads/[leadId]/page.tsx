@@ -19,7 +19,7 @@ export default async function LeadDetailPage({ params }: Props) {
   return (
     <div className="space-y-8">
       <div>
-        <Link href="/admin" className="text-xs uppercase tracking-[0.15em] text-text-secondary hover:text-text">
+        <Link href="/admin/dashboard" className="text-xs uppercase tracking-[0.15em] text-text-secondary hover:text-text">
           ← Pipeline
         </Link>
         <div className="mt-4 flex flex-wrap items-center gap-3">

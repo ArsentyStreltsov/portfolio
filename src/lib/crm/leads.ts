@@ -1,5 +1,4 @@
 import {
-  getDb,
   nowIso,
   type BriefRow,
   type EventRow,
@@ -9,6 +8,7 @@ import {
 } from "./db";
 import { buildOutreachUrl } from "./links";
 import { generateLeadId, nextTouchId } from "./ids";
+import { nextRowId, readStore, writeStore } from "./store";
 
 export type LeadInput = {
   business_name: string;
@@ -22,43 +22,40 @@ export type LeadInput = {
   subject_variant?: string;
 };
 
+function sortDescByDate<T extends { created_at?: string; updated_at?: string }>(
+  rows: T[],
+  field: "created_at" | "updated_at" = "created_at",
+) {
+  return [...rows].sort((a, b) => (b[field] ?? "").localeCompare(a[field] ?? ""));
+}
+
 export function listLeads(status?: LeadStatus) {
-  const db = getDb();
-  if (status) {
-    return db
-      .prepare("SELECT * FROM leads WHERE status = ? ORDER BY updated_at DESC")
-      .all(status) as LeadRow[];
-  }
-  return db.prepare("SELECT * FROM leads ORDER BY updated_at DESC").all() as LeadRow[];
+  const store = readStore();
+  const leads = sortDescByDate(store.leads, "updated_at");
+  if (status) return leads.filter((l) => l.status === status);
+  return leads;
 }
 
 export function getLeadByLeadId(leadId: string) {
-  const db = getDb();
-  const lead = db.prepare("SELECT * FROM leads WHERE lead_id = ?").get(leadId) as
-    | LeadRow
-    | undefined;
+  const store = readStore();
+  const lead = store.leads.find((l) => l.lead_id === leadId);
   if (!lead) return null;
-  const touches = db
-    .prepare("SELECT * FROM touches WHERE lead_id = ? ORDER BY created_at DESC")
-    .all(leadId) as TouchRow[];
-  const events = db
-    .prepare("SELECT * FROM events WHERE lead_id = ? ORDER BY created_at DESC LIMIT 100")
-    .all(leadId) as EventRow[];
-  const briefs = db
-    .prepare("SELECT * FROM briefs WHERE lead_id = ? ORDER BY created_at DESC")
-    .all(leadId) as BriefRow[];
+  const touches = sortDescByDate(store.touches.filter((t) => t.lead_id === leadId));
+  const events = sortDescByDate(store.events.filter((e) => e.lead_id === leadId)).slice(0, 100);
+  const briefs = sortDescByDate(store.briefs.filter((b) => b.lead_id === leadId));
   return { lead, touches, events, briefs };
 }
 
+export function getLeadBusinessName(leadId: string) {
+  return readStore().leads.find((l) => l.lead_id === leadId)?.business_name;
+}
+
 export function createLead(input: LeadInput) {
-  const db = getDb();
   const lead_id = generateLeadId();
   const ts = nowIso();
   const campaign = input.campaign ?? "se_websites_2026";
   const subject_variant = input.subject_variant ?? "email_v1";
-
-  const touchCount = 0;
-  const touch_id = nextTouchId(lead_id, touchCount);
+  const touch_id = nextTouchId(lead_id, 0);
   const outreach_url = buildOutreachUrl({
     leadId: lead_id,
     touchId: touch_id,
@@ -66,42 +63,61 @@ export function createLead(input: LeadInput) {
     content: subject_variant,
   });
 
-  db.prepare(
-    `INSERT INTO leads (lead_id, business_name, contact_name, email, phone, channel, status, campaign, notes, created_at, updated_at)
-     VALUES (@lead_id, @business_name, @contact_name, @email, @phone, @channel, @status, @campaign, @notes, @created_at, @updated_at)`,
-  ).run({
-    lead_id,
-    business_name: input.business_name.trim(),
-    contact_name: input.contact_name?.trim() || null,
-    email: input.email?.trim() || null,
-    phone: input.phone?.trim() || null,
-    channel: input.channel?.trim() || null,
-    status: input.status ?? "draft",
-    campaign,
-    notes: input.notes?.trim() || null,
-    created_at: ts,
-    updated_at: ts,
-  });
-
-  db.prepare(
-    `INSERT INTO touches (lead_id, touch_id, subject_variant, outreach_url, sent_at, created_at)
-     VALUES (@lead_id, @touch_id, @subject_variant, @outreach_url, NULL, @created_at)`,
-  ).run({
-    lead_id,
-    touch_id,
-    subject_variant,
-    outreach_url,
-    created_at: ts,
-  });
-
-  logEvent({
-    lead_id,
-    touch_id,
-    event_type: "lead_created",
-    summary: `Lead created: ${input.business_name.trim()}`,
+  writeStore((store) => {
+    store.leads.push({
+      id: nextRowId(store, "lead"),
+      lead_id,
+      business_name: input.business_name.trim(),
+      contact_name: input.contact_name?.trim() || null,
+      email: input.email?.trim() || null,
+      phone: input.phone?.trim() || null,
+      channel: input.channel?.trim() || null,
+      status: input.status ?? "draft",
+      campaign,
+      notes: input.notes?.trim() || null,
+      created_at: ts,
+      updated_at: ts,
+      sent_at: null,
+    });
+    store.touches.push({
+      id: nextRowId(store, "touch"),
+      lead_id,
+      touch_id,
+      subject_variant,
+      outreach_url,
+      sent_at: null,
+      created_at: ts,
+    });
+    appendEvent(store, {
+      lead_id,
+      touch_id,
+      event_type: "lead_created",
+      summary: `Lead created: ${input.business_name.trim()}`,
+    });
   });
 
   return getLeadByLeadId(lead_id)!;
+}
+
+function appendEvent(
+  store: ReturnType<typeof readStore>,
+  input: {
+    lead_id?: string | null;
+    touch_id?: string | null;
+    event_type: string;
+    summary?: string;
+    payload?: Record<string, unknown>;
+  },
+) {
+  store.events.push({
+    id: nextRowId(store, "event"),
+    lead_id: input.lead_id ?? null,
+    touch_id: input.touch_id ?? null,
+    event_type: input.event_type,
+    summary: input.summary ?? null,
+    payload: input.payload ? JSON.stringify(input.payload) : null,
+    created_at: nowIso(),
+  });
 }
 
 export function updateLead(
@@ -113,50 +129,47 @@ export function updateLead(
     >
   >,
 ) {
-  const db = getDb();
-  const existing = db.prepare("SELECT * FROM leads WHERE lead_id = ?").get(leadId) as LeadRow | undefined;
-  if (!existing) return null;
+  let result: ReturnType<typeof getLeadByLeadId> = null;
 
-  const updated = {
-    business_name: patch.business_name ?? existing.business_name,
-    contact_name: patch.contact_name !== undefined ? patch.contact_name : existing.contact_name,
-    email: patch.email !== undefined ? patch.email : existing.email,
-    phone: patch.phone !== undefined ? patch.phone : existing.phone,
-    channel: patch.channel !== undefined ? patch.channel : existing.channel,
-    status: patch.status ?? existing.status,
-    campaign: patch.campaign !== undefined ? patch.campaign : existing.campaign,
-    notes: patch.notes !== undefined ? patch.notes : existing.notes,
-    sent_at: patch.sent_at !== undefined ? patch.sent_at : existing.sent_at,
-    updated_at: nowIso(),
-  };
+  writeStore((store) => {
+    const idx = store.leads.findIndex((l) => l.lead_id === leadId);
+    if (idx === -1) return;
+    const existing = store.leads[idx]!;
 
-  db.prepare(
-    `UPDATE leads SET business_name=@business_name, contact_name=@contact_name, email=@email, phone=@phone,
-     channel=@channel, status=@status, campaign=@campaign, notes=@notes, sent_at=@sent_at, updated_at=@updated_at
-     WHERE lead_id=@lead_id`,
-  ).run({ ...updated, lead_id: leadId });
+    store.leads[idx] = {
+      ...existing,
+      business_name: patch.business_name ?? existing.business_name,
+      contact_name: patch.contact_name !== undefined ? patch.contact_name : existing.contact_name,
+      email: patch.email !== undefined ? patch.email : existing.email,
+      phone: patch.phone !== undefined ? patch.phone : existing.phone,
+      channel: patch.channel !== undefined ? patch.channel : existing.channel,
+      status: patch.status ?? existing.status,
+      campaign: patch.campaign !== undefined ? patch.campaign : existing.campaign,
+      notes: patch.notes !== undefined ? patch.notes : existing.notes,
+      sent_at: patch.sent_at !== undefined ? patch.sent_at : existing.sent_at,
+      updated_at: nowIso(),
+    };
 
-  if (patch.status && patch.status !== existing.status) {
-    logEvent({
-      lead_id: leadId,
-      event_type: "status_changed",
-      summary: `Status: ${existing.status} → ${patch.status}`,
-    });
-  }
+    if (patch.status && patch.status !== existing.status) {
+      appendEvent(store, {
+        lead_id: leadId,
+        event_type: "status_changed",
+        summary: `Status: ${existing.status} → ${patch.status}`,
+      });
+    }
+  });
 
-  return getLeadByLeadId(leadId);
+  result = getLeadByLeadId(leadId);
+  return result;
 }
 
 export function createFollowUpTouch(leadId: string, subject_variant?: string) {
-  const db = getDb();
-  const lead = db.prepare("SELECT * FROM leads WHERE lead_id = ?").get(leadId) as LeadRow | undefined;
+  const lead = readStore().leads.find((l) => l.lead_id === leadId);
   if (!lead) return null;
 
-  const countRow = db
-    .prepare("SELECT COUNT(*) as c FROM touches WHERE lead_id = ?")
-    .get(leadId) as { c: number };
-  const touch_id = nextTouchId(leadId, countRow.c);
-  const variant = subject_variant ?? `followup_${String(countRow.c + 1).padStart(2, "0")}`;
+  const touchCount = readStore().touches.filter((t) => t.lead_id === leadId).length;
+  const touch_id = nextTouchId(leadId, touchCount);
+  const variant = subject_variant ?? `followup_${String(touchCount + 1).padStart(2, "0")}`;
   const outreach_url = buildOutreachUrl({
     leadId,
     touchId: touch_id,
@@ -165,34 +178,48 @@ export function createFollowUpTouch(leadId: string, subject_variant?: string) {
   });
   const ts = nowIso();
 
-  db.prepare(
-    `INSERT INTO touches (lead_id, touch_id, subject_variant, outreach_url, sent_at, created_at)
-     VALUES (@lead_id, @touch_id, @subject_variant, @outreach_url, NULL, @created_at)`,
-  ).run({ lead_id: leadId, touch_id, subject_variant: variant, outreach_url, created_at: ts });
-
-  logEvent({
-    lead_id: leadId,
-    touch_id,
-    event_type: "touch_created",
-    summary: `New outreach link (${touch_id})`,
+  writeStore((store) => {
+    store.touches.push({
+      id: nextRowId(store, "touch"),
+      lead_id: leadId,
+      touch_id,
+      subject_variant: variant,
+      outreach_url,
+      sent_at: null,
+      created_at: ts,
+    });
+    appendEvent(store, {
+      lead_id: leadId,
+      touch_id,
+      event_type: "touch_created",
+      summary: `New outreach link (${touch_id})`,
+    });
   });
 
   return getLeadByLeadId(leadId);
 }
 
 export function markTouchSent(touchId: string) {
-  const db = getDb();
-  const touch = db.prepare("SELECT * FROM touches WHERE touch_id = ?").get(touchId) as TouchRow | undefined;
+  const touch = readStore().touches.find((t) => t.touch_id === touchId);
   if (!touch) return null;
   const ts = nowIso();
-  db.prepare("UPDATE touches SET sent_at = ? WHERE touch_id = ?").run(ts, touchId);
-  updateLead(touch.lead_id, { status: "sent", sent_at: ts });
-  logEvent({
-    lead_id: touch.lead_id,
-    touch_id: touchId,
-    event_type: "email_marked_sent",
-    summary: "Marked as sent",
+
+  writeStore((store) => {
+    const t = store.touches.find((x) => x.touch_id === touchId);
+    if (t) t.sent_at = ts;
   });
+
+  updateLead(touch.lead_id, { status: "sent", sent_at: ts });
+
+  writeStore((store) => {
+    appendEvent(store, {
+      lead_id: touch.lead_id,
+      touch_id: touchId,
+      event_type: "email_marked_sent",
+      summary: "Marked as sent",
+    });
+  });
+
   return getLeadByLeadId(touch.lead_id);
 }
 
@@ -203,30 +230,17 @@ export function logEvent(input: {
   summary?: string;
   payload?: Record<string, unknown>;
 }) {
-  const db = getDb();
-  db.prepare(
-    `INSERT INTO events (lead_id, touch_id, event_type, summary, payload, created_at)
-     VALUES (@lead_id, @touch_id, @event_type, @summary, @payload, @created_at)`,
-  ).run({
-    lead_id: input.lead_id ?? null,
-    touch_id: input.touch_id ?? null,
-    event_type: input.event_type,
-    summary: input.summary ?? null,
-    payload: input.payload ? JSON.stringify(input.payload) : null,
-    created_at: nowIso(),
-  });
+  writeStore((store) => {
+    appendEvent(store, input);
 
-  if (input.lead_id && input.event_type === "outreach_hit") {
-    const lead = db.prepare("SELECT status FROM leads WHERE lead_id = ?").get(input.lead_id) as
-      | { status: LeadStatus }
-      | undefined;
-    if (lead && (lead.status === "draft" || lead.status === "ready" || lead.status === "sent")) {
-      db.prepare("UPDATE leads SET status = 'opened', updated_at = ? WHERE lead_id = ?").run(
-        nowIso(),
-        input.lead_id,
-      );
+    if (input.lead_id && input.event_type === "outreach_hit") {
+      const lead = store.leads.find((l) => l.lead_id === input.lead_id);
+      if (lead && (lead.status === "draft" || lead.status === "ready" || lead.status === "sent")) {
+        lead.status = "opened";
+        lead.updated_at = nowIso();
+      }
     }
-  }
+  });
 }
 
 export function saveBrief(input: {
@@ -236,18 +250,18 @@ export function saveBrief(input: {
   contact_email?: string;
   payload: Record<string, unknown>;
 }) {
-  const db = getDb();
   const ts = nowIso();
-  db.prepare(
-    `INSERT INTO briefs (lead_id, business_name, contact_name, contact_email, payload, created_at)
-     VALUES (@lead_id, @business_name, @contact_name, @contact_email, @payload, @created_at)`,
-  ).run({
-    lead_id: input.lead_id ?? null,
-    business_name: input.business_name ?? null,
-    contact_name: input.contact_name ?? null,
-    contact_email: input.contact_email ?? null,
-    payload: JSON.stringify(input.payload),
-    created_at: ts,
+
+  writeStore((store) => {
+    store.briefs.push({
+      id: nextRowId(store, "brief"),
+      lead_id: input.lead_id ?? null,
+      business_name: input.business_name ?? null,
+      contact_name: input.contact_name ?? null,
+      contact_email: input.contact_email ?? null,
+      payload: JSON.stringify(input.payload),
+      created_at: ts,
+    });
   });
 
   if (input.lead_id) {
@@ -267,16 +281,14 @@ export function saveBrief(input: {
 }
 
 export function getDashboardStats() {
-  const db = getDb();
-  const total = (db.prepare("SELECT COUNT(*) as c FROM leads").get() as { c: number }).c;
-  const byStatus = db
-    .prepare("SELECT status, COUNT(*) as c FROM leads GROUP BY status")
-    .all() as { status: string; c: number }[];
-  const recentEvents = db
-    .prepare("SELECT * FROM events ORDER BY created_at DESC LIMIT 15")
-    .all() as EventRow[];
-  const organicBriefs = db
-    .prepare("SELECT * FROM briefs WHERE lead_id IS NULL ORDER BY created_at DESC LIMIT 10")
-    .all() as BriefRow[];
+  const store = readStore();
+  const total = store.leads.length;
+  const counts = new Map<string, number>();
+  for (const lead of store.leads) {
+    counts.set(lead.status, (counts.get(lead.status) ?? 0) + 1);
+  }
+  const byStatus = [...counts.entries()].map(([status, c]) => ({ status, c }));
+  const recentEvents = sortDescByDate(store.events).slice(0, 15);
+  const organicBriefs = sortDescByDate(store.briefs.filter((b) => !b.lead_id)).slice(0, 10);
   return { total, byStatus, recentEvents, organicBriefs };
 }

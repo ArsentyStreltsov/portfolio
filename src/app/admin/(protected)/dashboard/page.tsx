@@ -38,14 +38,14 @@ export default async function AdminDashboardPage({ searchParams }: Props) {
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <FilterChip href="/admin" active={!validStatus} label="All" count={stats.total} />
+        <FilterChip href="/admin/dashboard" active={!validStatus} label="All" count={stats.total} />
         {LEAD_STATUSES.map((s) => {
           const count = stats.byStatus.find((b) => b.status === s.value)?.c ?? 0;
           if (count === 0 && validStatus !== s.value) return null;
           return (
             <FilterChip
               key={s.value}
-              href={`/admin?status=${s.value}`}
+              href={`/admin/dashboard?status=${s.value}`}
               active={validStatus === s.value}
               label={s.label}
               count={count}

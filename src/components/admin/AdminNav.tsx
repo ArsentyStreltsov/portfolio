@@ -16,12 +16,12 @@ export function AdminNav() {
     <header className="border-b border-border bg-bg">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-4">
         <div className="flex items-center gap-6">
-          <Link href="/admin" className="font-display text-lg font-bold uppercase tracking-[-0.02em]">
+          <Link href="/admin/dashboard" className="font-display text-lg font-bold uppercase tracking-[-0.02em]">
             Outreach CRM
           </Link>
           <nav className="hidden items-center gap-4 sm:flex">
             <Link
-              href="/admin"
+              href="/admin/dashboard"
               className="text-[0.7rem] font-medium uppercase tracking-[0.15em] text-text-secondary hover:text-text"
             >
               Pipeline

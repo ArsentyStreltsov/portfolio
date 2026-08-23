@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { saveBrief } from "@/lib/crm/leads";
-import { getDb } from "@/lib/crm/db";
 import { sendNtfy } from "@/lib/ntfy";
 import { sanitizeOutreachId } from "@/lib/outreach/validate";
 
@@ -58,7 +57,6 @@ export async function POST(request: NextRequest) {
     }
 
     try {
-      getDb();
       saveBrief({
         lead_id: lead_id ?? null,
         business_name: body.businessName,
