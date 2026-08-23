@@ -23,8 +23,8 @@ export function AboutSection() {
             <p>Want a website your competitors wish they had?</p>
 
             <p>
-              Fortunately, I design and build modern websites for businesses that want to stand out,
-              look professional, and make it easy for customers to choose them
+              Based in Malmö, I design and build modern websites for businesses across Sweden that
+              want to stand out, look professional, and make it easy for customers to choose them.
             </p>
 
             <p>

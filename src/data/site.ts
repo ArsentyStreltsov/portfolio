@@ -25,7 +25,7 @@ export const site = {
   ],
 
   seo: {
-    title: "Arsenty Streltsov",
+    title: "Arsenty Streltsov — Web Designer & Developer in Malmö",
     description:
       "Independent web designer & developer in Malmö, Sweden. Modern websites for small businesses — clear process, direct communication, selected portfolio work.",
     startDescription:

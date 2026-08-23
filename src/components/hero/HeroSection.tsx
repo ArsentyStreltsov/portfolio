@@ -31,7 +31,7 @@ export function HeroSection() {
           data-hero-eyebrow
           className="max-w-[16rem] text-[0.65rem] font-medium uppercase leading-relaxed tracking-[0.28em] text-text-secondary sm:max-w-none sm:text-[0.7rem] sm:tracking-[0.3em]"
         >
-          Independent web design &amp; development
+          Independent web designer &amp; developer · Malmö, Sweden
         </p>
 
         <h1 className="mt-6 w-full max-w-full break-words font-display font-extrabold uppercase leading-[0.9] tracking-[-0.04em] text-[clamp(1.9rem,calc(0.4rem+6.6vw),5.75rem)]">

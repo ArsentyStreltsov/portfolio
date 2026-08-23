@@ -50,7 +50,7 @@ function SelectedWorkInner() {
                 >
                   <img
                     src={project.coverImage}
-                    alt=""
+                    alt={`${project.title} — ${project.category} website`}
                     width={1400}
                     height={875}
                     className="h-full w-full object-cover object-top transition-transform duration-500 group-hover:scale-[1.03]"

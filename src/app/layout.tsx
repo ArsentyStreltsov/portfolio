@@ -4,6 +4,7 @@ import { AppShell } from "@/components/layout/AppShell";
 import { TabTitle } from "@/components/layout/TabTitle";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { AnalyticsProvider } from "@/components/analytics/AnalyticsProvider";
+import { inter, syne } from "@/lib/fonts";
 import { getSiteUrl } from "@/lib/site-url";
 import "./globals.css";
 
@@ -21,7 +22,7 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: {
-    default: site.name,
+    default: site.seo.title,
     template: `%s — ${site.name}`,
   },
   description: site.seo.description,
@@ -42,21 +43,18 @@ export const metadata: Metadata = {
     icon: [{ url: "/icon", type: "image/png", sizes: "192x192" }],
     apple: [{ url: "/apple-icon", type: "image/png", sizes: "180x180" }],
   },
-  alternates: {
-    canonical: "/",
-  },
   openGraph: {
     type: "website",
     locale: "en_US",
     url: siteUrl,
     siteName: site.name,
-    title: site.name,
+    title: site.seo.title,
     description: site.seo.description,
     images: [{ url: "/opengraph-image", width: 1200, height: 630, alt: site.name }],
   },
   twitter: {
     card: "summary_large_image",
-    title: site.name,
+    title: site.seo.title,
     description: site.seo.description,
     images: ["/opengraph-image"],
   },
@@ -76,15 +74,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Syne:wght@700;800&display=swap"
-          rel="stylesheet"
-        />
-      </head>
+    <html lang="en" className={`${inter.variable} ${syne.variable}`} suppressHydrationWarning>
       <body className="min-h-screen" suppressHydrationWarning>
         <JsonLd />
         <TabTitle />

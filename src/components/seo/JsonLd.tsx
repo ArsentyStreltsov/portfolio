@@ -1,6 +1,9 @@
 import { site } from "@/data/site";
 import { getSiteUrl } from "@/lib/site-url";
 
+/** Malmö city centre — for LocalBusiness / geo hints only. */
+const MALMO_GEO = { latitude: 55.605, longitude: 13.0038 };
+
 export function JsonLd() {
   const url = getSiteUrl();
 
@@ -19,12 +22,12 @@ export function JsonLd() {
       "@id": `${url}/#person`,
       name: site.name,
       url,
-      email: site.contact.email,
       jobTitle: site.descriptor,
       description: site.seo.description,
       address: {
         "@type": "PostalAddress",
         addressLocality: "Malmö",
+        addressRegion: "Skåne",
         addressCountry: "SE",
       },
       sameAs: [site.social.linkedin, site.social.instagram],
@@ -35,7 +38,23 @@ export function JsonLd() {
       name: `${site.name} — Web Design & Development`,
       url,
       description: site.seo.description,
-      areaServed: "SE",
+      image: `${url}/opengraph-image`,
+      address: {
+        "@type": "PostalAddress",
+        addressLocality: "Malmö",
+        addressRegion: "Skåne",
+        addressCountry: "SE",
+      },
+      geo: {
+        "@type": "GeoCoordinates",
+        latitude: MALMO_GEO.latitude,
+        longitude: MALMO_GEO.longitude,
+      },
+      areaServed: [
+        { "@type": "City", name: "Malmö" },
+        { "@type": "AdministrativeArea", name: "Skåne County" },
+        { "@type": "Country", name: "Sweden" },
+      ],
       provider: { "@id": `${url}/#person` },
     },
   ];

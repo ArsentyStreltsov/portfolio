@@ -9,18 +9,18 @@ import { SectionTracker } from "@/components/analytics/SectionTracker";
 import { site } from "@/data/site";
 
 export const metadata: Metadata = {
-  title: site.name,
+  title: site.seo.title,
   description: site.seo.description,
   alternates: { canonical: "/" },
   openGraph: {
-    title: site.name,
+    title: site.seo.title,
     description: site.seo.description,
     url: "/",
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: site.name,
+    title: site.seo.title,
     description: site.seo.description,
   },
 };
