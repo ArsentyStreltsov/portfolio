@@ -98,10 +98,6 @@ export function EmailDraft({
           <h2 className="text-[0.7rem] font-semibold uppercase tracking-[0.2em] text-text-secondary">
             Email draft
           </h2>
-          <p className="mt-1 text-xs text-text-secondary">
-            Semi-auto: copy or open Gmail, send from your real inbox (better deliverability). Then mark
-            sent.
-          </p>
         </div>
         <select
           value={templateId}
