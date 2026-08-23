@@ -43,7 +43,11 @@ export function HeroSection() {
             deserve <br className="sm:hidden" />
             better
           </span>
-          <span data-hero-line className="block text-accent">websites</span>
+          <span data-hero-line className="mt-1 block sm:mt-2">
+            <span className="box-decoration-clone bg-accent px-[0.12em] text-bg-dark [-webkit-box-decoration-break:clone] [box-decoration-break:clone]">
+              websites
+            </span>
+          </span>
         </h1>
 
         <div className="mt-8 flex w-full flex-col gap-3 sm:mt-10 sm:flex-row sm:flex-wrap sm:gap-4">
