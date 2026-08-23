@@ -303,6 +303,15 @@ ufw allow 'Nginx Full'
 ufw enable
 ```
 
+### CRM backups
+
+Приложение само пишет дневной снимок в `data/backups/crm-store-YYYY-MM-DD.json` (последние 14 дней). Дополнительно можно раз в неделю копировать на другой диск:
+
+```bash
+# пример ручного бэкапа
+cp /var/www/arsenty-portfolio/data/crm-store.json ~/crm-backup-$(date +%F).json
+```
+
 ---
 
 ## Чего делать не нужно

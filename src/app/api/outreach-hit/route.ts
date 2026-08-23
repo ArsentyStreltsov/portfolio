@@ -8,6 +8,7 @@ import {
   sanitizeOutreachUtm,
   type OutreachHitPayload,
 } from "@/lib/outreach/validate";
+import { clientIp, rateLimit, rateLimitResponse } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -25,6 +26,10 @@ function pruneRecent(now: number) {
 
 export async function POST(request: NextRequest) {
   try {
+    const ip = clientIp(request);
+    const limited = rateLimit({ key: `outreach-hit:${ip}`, limit: 60, windowMs: 60 * 1000 });
+    if (!limited.ok) return rateLimitResponse(limited.retryAfterSec);
+
     const body = (await request.json()) as Partial<OutreachHitPayload>;
     const lead_id = sanitizeOutreachId(body.lead_id);
     if (!lead_id) {

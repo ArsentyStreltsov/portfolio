@@ -14,6 +14,7 @@ out/
 data/leads.json
 data/outreach-hits.jsonl
 data/crm-store.json
+data/backups/
 
 # logs & caches
 npm-debug.log*

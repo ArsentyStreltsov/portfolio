@@ -10,7 +10,7 @@ export default function NewLeadPage() {
         </Link>
         <h1 className="mt-4 font-display text-3xl font-bold uppercase">New lead</h1>
         <p className="mt-2 text-sm text-text-secondary">
-          Creates a lead, first outreach link, and opens the detail page to copy the URL into your email.
+          Paste a website URL to auto-fill fields, review, then create the lead + outreach link.
         </p>
       </div>
       <NewLeadForm />
