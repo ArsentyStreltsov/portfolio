@@ -13,6 +13,8 @@ out/
 # local data (runtime leads / outreach hit log)
 data/leads.json
 data/outreach-hits.jsonl
+data/crm.db
+data/crm.db-*
 
 # logs & caches
 npm-debug.log*

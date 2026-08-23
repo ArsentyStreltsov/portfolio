@@ -1,6 +1,9 @@
 import { appendFile, mkdir } from "node:fs/promises";
 import path from "node:path";
 import { NextRequest, NextResponse } from "next/server";
+import { logEvent } from "@/lib/crm/leads";
+import { getDb } from "@/lib/crm/db";
+import { sendNtfy } from "@/lib/ntfy";
 import {
   sanitizeOutreachId,
   sanitizeOutreachUtm,
@@ -12,7 +15,6 @@ export const runtime = "nodejs";
 const LOG_DIR = path.join(process.cwd(), "data");
 const LOG_FILE = path.join(LOG_DIR, "outreach-hits.jsonl");
 
-/** Soft dedupe in-process (PM2 single instance): same lead+touch within 2 minutes. */
 const recent = new Map<string, number>();
 const DEDUPE_MS = 2 * 60 * 1000;
 
@@ -22,11 +24,6 @@ function pruneRecent(now: number) {
   }
 }
 
-/**
- * Minimal campaign-link hit log.
- * No cookies, no IP, no names/emails — only opaque lead_id + UTM campaign tags.
- * Used to know a tagged email link was opened even when analytics consent is denied.
- */
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as Partial<OutreachHitPayload>;
@@ -59,13 +56,38 @@ export async function POST(request: NextRequest) {
     }
     recent.set(dedupeKey, now);
 
-    // Drop undefined utm fields for cleaner logs
     const line = JSON.stringify(
       Object.fromEntries(Object.entries(entry).filter(([, v]) => v !== undefined)),
     );
-
     await mkdir(LOG_DIR, { recursive: true });
     await appendFile(LOG_FILE, `${line}\n`, "utf8");
+
+    let businessName: string | undefined;
+    try {
+      const db = getDb();
+      logEvent({
+        lead_id,
+        touch_id: touch_id ?? null,
+        event_type: "outreach_hit",
+        summary: `Opened outreach link${entry.path !== "/" ? ` (${entry.path})` : ""}`,
+        payload: entry,
+      });
+      const leadRow = db
+        .prepare("SELECT business_name FROM leads WHERE lead_id = ?")
+        .get(lead_id) as { business_name: string } | undefined;
+      businessName = leadRow?.business_name;
+    } catch {
+      // CRM optional if DB unavailable
+    }
+
+    void sendNtfy({
+      title: `Outreach visit: ${lead_id}`,
+      message: businessName
+        ? `${businessName} opened your link`
+        : `Lead ${lead_id} opened your outreach link`,
+      tags: "eyes",
+      priority: "default",
+    });
 
     return NextResponse.json({ ok: true });
   } catch {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { track } from "@/lib/analytics";
+import { getLatestAttribution, track } from "@/lib/analytics";
 
 /** UI step ids → analytics taxonomy (no PII). */
 const steps = [
@@ -102,7 +102,11 @@ export default function BriefPage() {
       const res = await fetch("/api/brief", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, submittedAt: new Date().toISOString() }),
+        body: JSON.stringify({
+          ...form,
+          lead_id: getLatestAttribution().lead_id,
+          submittedAt: new Date().toISOString(),
+        }),
       });
       if (!res.ok) {
         const data = (await res.json().catch(() => null)) as { error?: string } | null;
