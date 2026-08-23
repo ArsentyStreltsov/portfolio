@@ -17,14 +17,15 @@ export default async function AppleIcon() {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          background: "transparent",
-          color: "#ffffff",
-          fontSize: 110,
+          background: "#1a1a1a",
+          borderRadius: 34,
+          color: "#c8ff00",
+          fontSize: 90,
           fontWeight: 700,
-          letterSpacing: "0.12em",
+          letterSpacing: "0.08em",
           fontFamily: "Syne",
           lineHeight: 1,
-          paddingLeft: "0.12em",
+          paddingLeft: "0.08em",
         }}
       >
         AS

@@ -35,7 +35,11 @@ function SelectedWorkInner() {
               <button
                 type="button"
                 onClick={() => {
-                  track("project_open", { slug: project.slug });
+                  track("project_opened", {
+                    project_slug: project.slug,
+                    project_category: project.category,
+                    project_type: project.projectType,
+                  });
                   setActive(project);
                 }}
                 className="group flex w-full flex-col overflow-hidden border border-border bg-bg text-left transition-colors hover:border-text"

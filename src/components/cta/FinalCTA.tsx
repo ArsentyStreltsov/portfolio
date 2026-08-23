@@ -18,14 +18,26 @@ export function FinalCTA() {
         <div className="mt-10 flex flex-wrap gap-4">
           <a
             href="/start"
-            onClick={() => track("start_project_click")}
+            onClick={() =>
+              track("cta_clicked", {
+                cta_id: "start_project",
+                cta_location: "final_cta",
+                destination: "/start",
+              })
+            }
             className="bg-accent text-bg-dark px-7 py-3.5 text-[0.8rem] font-bold uppercase tracking-[0.12em] transition-transform hover:scale-[1.02]"
           >
             Start the short brief
           </a>
           <a
             href={`mailto:${site.contact.email}`}
-            onClick={() => track("email_click")}
+            onClick={() =>
+              track("email_contact_clicked", {
+                cta_id: "email_me",
+                cta_location: "final_cta",
+                destination: "mailto",
+              })
+            }
             className="border border-text-inverse/30 px-7 py-3.5 text-[0.8rem] font-semibold uppercase tracking-[0.12em] text-text-inverse transition-colors hover:border-text-inverse"
           >
             Email me

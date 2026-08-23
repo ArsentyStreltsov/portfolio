@@ -62,7 +62,13 @@ export function Header() {
           ))}
           <a
             href="/start"
-            onClick={() => track("start_project_click")}
+            onClick={() =>
+              track("cta_clicked", {
+                cta_id: "start_project",
+                cta_location: "header",
+                destination: "/start",
+              })
+            }
             className="bg-text text-bg px-5 py-2 text-[0.75rem] font-semibold uppercase tracking-[0.12em] transition-transform hover:scale-[1.02]"
           >
             Start a project
@@ -99,7 +105,14 @@ export function Header() {
             ))}
             <a
               href="/start"
-              onClick={() => { setMenuOpen(false); track("start_project_click"); }}
+              onClick={() => {
+                setMenuOpen(false);
+                track("cta_clicked", {
+                  cta_id: "start_project",
+                  cta_location: "header_mobile",
+                  destination: "/start",
+                });
+              }}
               className="bg-text text-bg px-6 py-3 text-center text-sm font-semibold uppercase tracking-[0.12em]"
             >
               Start a project

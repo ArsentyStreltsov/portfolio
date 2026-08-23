@@ -96,9 +96,19 @@ nano /var/www/arsenty-portfolio/.env.production
 NTFY_TOPIC=твой-секретный-топик-ntfy
 # NTFY_URL=https://ntfy.sh
 NEXT_PUBLIC_SITE_URL=https://ДОМЕН
+NEXT_PUBLIC_POSTHOG_KEY=phc_...
+NEXT_PUBLIC_POSTHOG_HOST=https://eu.i.posthog.com
 ```
 
 `NEXT_PUBLIC_SITE_URL` нужен для SEO (canonical, sitemap, Open Graph). Без него подставится `https://arsentystreltsov.com`.
+
+PostHog EU keys — из настроек проекта PostHog (см. `cold-outreach-analytics-manual-setup.md`). Без них аналитика просто не стартует.
+
+Клики по tagged email-ссылкам (`lead_id` в URL) пишутся в `data/outreach-hits.jsonl` **без cookies и без согласия** (только opaque id + UTM). Смотреть на сервере:
+
+```bash
+tail -n 50 /var/www/arsenty-portfolio/data/outreach-hits.jsonl
+```
 
 Сохрани: `Ctrl+O`, Enter, `Ctrl+X`.
 

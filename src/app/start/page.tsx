@@ -1,15 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { track } from "@/lib/analytics";
 
+/** UI step ids → analytics taxonomy (no PII). */
 const steps = [
-  { id: "business", label: "About your business" },
-  { id: "needs", label: "What you need" },
-  { id: "goals", label: "Goals" },
-  { id: "extra", label: "Anything else" },
-  { id: "contact", label: "Your details" },
-];
+  { id: "business", analyticsId: "business", label: "About your business" },
+  { id: "needs", analyticsId: "project_type", label: "What you need" },
+  { id: "goals", analyticsId: "goal", label: "Goals" },
+  { id: "extra", analyticsId: "details", label: "Anything else" },
+  { id: "contact", analyticsId: "contact", label: "Your details" },
+] as const;
 
 const needsOptions = [
   { value: "new", label: "A new website" },
@@ -53,6 +54,24 @@ export default function BriefPage() {
 
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
+  const opened = useRef(false);
+  const viewedSteps = useRef<Set<number>>(new Set());
+
+  useEffect(() => {
+    if (!opened.current) {
+      opened.current = true;
+      track("brief_opened");
+    }
+  }, []);
+
+  useEffect(() => {
+    if (viewedSteps.current.has(step)) return;
+    viewedSteps.current.add(step);
+    track("brief_step_viewed", {
+      step_number: step + 1,
+      step_id: steps[step].analyticsId,
+    });
+  }, [step]);
 
   const set = (field: keyof FormData, value: string | string[]) =>
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -60,11 +79,23 @@ export default function BriefPage() {
   const toggleGoal = (g: string) =>
     set("goals", form.goals.includes(g) ? form.goals.filter((x) => x !== g) : [...form.goals, g]);
 
-  const next = () => setStep((s) => Math.min(s + 1, steps.length - 1));
-  const prev = () => setStep((s) => Math.max(s - 1, 0));
+  const next = () => {
+    track("brief_step_completed", {
+      step_number: step + 1,
+      step_id: steps[step].analyticsId,
+    });
+    setStep((s) => Math.min(s + 1, steps.length - 1));
+  };
+
+  const prev = () => {
+    track("brief_back_clicked", {
+      step_number: step + 1,
+      step_id: steps[step].analyticsId,
+    });
+    setStep((s) => Math.max(s - 1, 0));
+  };
 
   const submit = async () => {
-    track("brief_complete");
     setSubmitError(null);
     setSending(true);
     try {
@@ -75,11 +106,24 @@ export default function BriefPage() {
       });
       if (!res.ok) {
         const data = (await res.json().catch(() => null)) as { error?: string } | null;
+        track("brief_submit_error", {
+          step_number: step + 1,
+          step_id: steps[step].analyticsId,
+        });
         setSubmitError(data?.error ?? "Could not send the brief. Please try again or email me.");
         return;
       }
+      track("brief_step_completed", {
+        step_number: step + 1,
+        step_id: steps[step].analyticsId,
+      });
+      track("brief_submitted");
       setSubmitted(true);
     } catch {
+      track("brief_submit_error", {
+        step_number: step + 1,
+        step_id: steps[step].analyticsId,
+      });
       setSubmitError("Network error. Please try again or email me.");
     } finally {
       setSending(false);
@@ -92,7 +136,10 @@ export default function BriefPage() {
         <div className="text-center">
           <h1 className="font-display text-4xl font-bold uppercase">Thank you.</h1>
           <p className="mt-4 text-text-secondary">I&apos;ll get back to you within a day or two.</p>
-          <a href="/" className="mt-8 inline-block text-sm font-medium uppercase tracking-[0.1em] text-text-secondary hover:text-text">
+          <a
+            href="/"
+            className="mt-8 inline-block text-sm font-medium uppercase tracking-[0.1em] text-text-secondary hover:text-text"
+          >
             ← Back to homepage
           </a>
         </div>
@@ -103,15 +150,10 @@ export default function BriefPage() {
   return (
     <div className="flex min-h-screen flex-col justify-center px-6 pt-28 pb-16">
       <div className="mx-auto w-full max-w-xl">
-        {/* Progress */}
         <div className="mb-12 flex items-center gap-2">
           {steps.map((s, i) => (
             <div key={s.id} className="flex flex-1 items-center gap-2">
-              <div
-                className={`h-1 w-full transition-colors ${
-                  i <= step ? "bg-text" : "bg-border"
-                }`}
-              />
+              <div className={`h-1 w-full transition-colors ${i <= step ? "bg-text" : "bg-border"}`} />
             </div>
           ))}
         </div>
@@ -126,8 +168,17 @@ export default function BriefPage() {
         <div className="mt-8 space-y-6">
           {step === 0 && (
             <>
-              <Field label="Business name" value={form.businessName} onChange={(v) => set("businessName", v)} />
-              <Field label="Website URL (if you have one)" value={form.url} onChange={(v) => set("url", v)} optional />
+              <Field
+                label="Business name"
+                value={form.businessName}
+                onChange={(v) => set("businessName", v)}
+              />
+              <Field
+                label="Website URL (if you have one)"
+                value={form.url}
+                onChange={(v) => set("url", v)}
+                optional
+              />
             </>
           )}
 
@@ -177,7 +228,8 @@ export default function BriefPage() {
               onChange={(e) => set("extra", e.target.value)}
               rows={5}
               placeholder="Anything about the project, deadline, budget or style..."
-              className="w-full border border-border bg-transparent px-4 py-3 text-sm outline-none focus:border-text"
+              className="ph-mask w-full border border-border bg-transparent px-4 py-3 text-sm outline-none focus:border-text"
+              data-ph-mask
             />
           )}
 
@@ -185,7 +237,12 @@ export default function BriefPage() {
             <>
               <Field label="Your name" value={form.name} onChange={(v) => set("name", v)} />
               <Field label="Email" value={form.email} onChange={(v) => set("email", v)} type="email" />
-              <Field label="Phone (optional)" value={form.phone} onChange={(v) => set("phone", v)} optional />
+              <Field
+                label="Phone (optional)"
+                value={form.phone}
+                onChange={(v) => set("phone", v)}
+                optional
+              />
             </>
           )}
         </div>
@@ -197,33 +254,33 @@ export default function BriefPage() {
             </p>
           )}
           <div className="flex gap-4">
-          {step > 0 && (
-            <button
-              type="button"
-              onClick={prev}
-              className="border border-border px-6 py-3 text-[0.75rem] font-semibold uppercase tracking-[0.12em] transition-colors hover:border-text"
-            >
-              Back
-            </button>
-          )}
-          {step < steps.length - 1 ? (
-            <button
-              type="button"
-              onClick={next}
-              className="bg-text text-bg px-6 py-3 text-[0.75rem] font-semibold uppercase tracking-[0.12em] transition-transform hover:scale-[1.02]"
-            >
-              Continue
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={submit}
-              disabled={!form.name || !form.email || sending}
-              className="bg-text text-bg px-6 py-3 text-[0.75rem] font-semibold uppercase tracking-[0.12em] transition-transform hover:scale-[1.02] disabled:opacity-40"
-            >
-              {sending ? "Sending…" : "Send brief"}
-            </button>
-          )}
+            {step > 0 && (
+              <button
+                type="button"
+                onClick={prev}
+                className="border border-border px-6 py-3 text-[0.75rem] font-semibold uppercase tracking-[0.12em] transition-colors hover:border-text"
+              >
+                Back
+              </button>
+            )}
+            {step < steps.length - 1 ? (
+              <button
+                type="button"
+                onClick={next}
+                className="bg-text text-bg px-6 py-3 text-[0.75rem] font-semibold uppercase tracking-[0.12em] transition-transform hover:scale-[1.02]"
+              >
+                Continue
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={submit}
+                disabled={!form.name || !form.email || sending}
+                className="bg-text text-bg px-6 py-3 text-[0.75rem] font-semibold uppercase tracking-[0.12em] transition-transform hover:scale-[1.02] disabled:opacity-40"
+              >
+                {sending ? "Sending…" : "Send brief"}
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -253,7 +310,9 @@ function Field({
         type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="mt-2 w-full border-b border-border bg-transparent py-2 text-sm outline-none focus:border-text"
+        className="ph-mask mt-2 w-full border-b border-border bg-transparent py-2 text-sm outline-none focus:border-text"
+        data-ph-mask
+        autoComplete={type === "email" ? "email" : "on"}
       />
     </div>
   );

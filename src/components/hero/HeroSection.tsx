@@ -56,7 +56,11 @@ export function HeroSection() {
             href="#showreel"
             onClick={(e: MouseEvent<HTMLAnchorElement>) => {
               e.preventDefault();
-              track("hero_view_work_click");
+              track("cta_clicked", {
+                cta_id: "view_work",
+                cta_location: "hero",
+                destination: "#showreel",
+              });
               goToViewWork();
             }}
             className="inline-flex w-full items-center justify-center bg-text px-6 py-3.5 text-[0.75rem] font-semibold uppercase tracking-[0.12em] text-bg transition-transform hover:scale-[1.02] sm:w-auto sm:px-7 sm:text-[0.8rem]"
@@ -66,7 +70,13 @@ export function HeroSection() {
           <a
             data-hero-cta
             href="/start"
-            onClick={() => track("start_project_click")}
+            onClick={() =>
+              track("cta_clicked", {
+                cta_id: "start_project",
+                cta_location: "hero",
+                destination: "/start",
+              })
+            }
             className="inline-flex w-full items-center justify-center border border-text px-6 py-3.5 text-[0.75rem] font-semibold uppercase tracking-[0.12em] transition-colors hover:bg-text hover:text-bg sm:w-auto sm:px-7 sm:text-[0.8rem]"
           >
             Start a project

@@ -2,7 +2,8 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { ImageResponse } from "next/og";
 
-export const size = { width: 64, height: 64 };
+/** Google favicon — needs solid background + contrast (not transparent + white). */
+export const size = { width: 192, height: 192 };
 export const contentType = "image/png";
 
 export default async function Icon() {
@@ -17,14 +18,15 @@ export default async function Icon() {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          background: "transparent",
-          color: "#ffffff",
-          fontSize: 42,
+          background: "#1a1a1a",
+          borderRadius: 36,
+          color: "#c8ff00",
+          fontSize: 96,
           fontWeight: 700,
-          letterSpacing: "0.12em",
+          letterSpacing: "0.08em",
           fontFamily: "Syne",
           lineHeight: 1,
-          paddingLeft: "0.12em",
+          paddingLeft: "0.08em",
         }}
       >
         AS

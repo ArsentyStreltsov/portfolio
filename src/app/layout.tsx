@@ -3,6 +3,7 @@ import { site } from "@/data/site";
 import { AppShell } from "@/components/layout/AppShell";
 import { TabTitle } from "@/components/layout/TabTitle";
 import { JsonLd } from "@/components/seo/JsonLd";
+import { AnalyticsProvider } from "@/components/analytics/AnalyticsProvider";
 import { getSiteUrl } from "@/lib/site-url";
 import "./globals.css";
 
@@ -37,6 +38,10 @@ export const metadata: Metadata = {
     "Arsenty Streltsov",
     "freelance designer",
   ],
+  icons: {
+    icon: [{ url: "/icon", type: "image/png", sizes: "192x192" }],
+    apple: [{ url: "/apple-icon", type: "image/png", sizes: "180x180" }],
+  },
   alternates: {
     canonical: "/",
   },
@@ -47,11 +52,13 @@ export const metadata: Metadata = {
     siteName: site.name,
     title: site.name,
     description: site.seo.description,
+    images: [{ url: "/opengraph-image", width: 1200, height: 630, alt: site.name }],
   },
   twitter: {
     card: "summary_large_image",
     title: site.name,
     description: site.seo.description,
+    images: ["/opengraph-image"],
   },
   robots: {
     index: true,
@@ -81,7 +88,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="min-h-screen" suppressHydrationWarning>
         <JsonLd />
         <TabTitle />
-        <AppShell>{children}</AppShell>
+        <AnalyticsProvider>
+          <AppShell>{children}</AppShell>
+        </AnalyticsProvider>
       </body>
     </html>
   );

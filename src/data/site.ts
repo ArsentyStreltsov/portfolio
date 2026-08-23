@@ -27,6 +27,8 @@ export const site = {
   seo: {
     title: "Arsenty Streltsov",
     description:
-      "Modern websites for small businesses — designed and built with a fast, clear and personal process.",
+      "Independent web designer & developer in Malmö, Sweden. Modern websites for small businesses — clear process, direct communication, selected portfolio work.",
+    startDescription:
+      "Start a short project brief — tell me about your business, goals, and timeline. I'll reply within a day or two.",
   },
 } as const;

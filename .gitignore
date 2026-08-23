@@ -10,8 +10,9 @@ out/
 .env.*
 !.env.example
 
-# local data (runtime leads, if any)
+# local data (runtime leads / outreach hit log)
 data/leads.json
+data/outreach-hits.jsonl
 
 # logs & caches
 npm-debug.log*
@@ -24,3 +25,7 @@ yarn-error.log*
 .DS_Store
 .idea/
 .vscode/
+
+# Private outreach / analytics setup notes (local only)
+cold-outreach-analytics-manual-setup.md
+Cold outreach analytics — Cursor implementation brief.md
