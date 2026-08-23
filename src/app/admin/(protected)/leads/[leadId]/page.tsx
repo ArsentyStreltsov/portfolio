@@ -3,15 +3,27 @@ import { notFound } from "next/navigation";
 import { LeadEditor } from "@/components/admin/LeadEditor";
 import { TouchList } from "@/components/admin/TouchList";
 import { StatusBadge } from "@/components/admin/StatusBadge";
-import { getLeadByLeadId } from "@/lib/crm/leads";
+import { PostHogActivity } from "@/components/admin/PostHogActivity";
+import { getLeadByLeadId, updateLead } from "@/lib/crm/leads";
 import { formatDate, posthogPersonUrl } from "@/lib/crm/ui";
+import {
+  fetchLeadPostHogEvents,
+  suggestedStatusFromPostHog,
+} from "@/lib/posthog/query";
 
 type Props = { params: Promise<{ leadId: string }> };
 
 export default async function LeadDetailPage({ params }: Props) {
   const { leadId } = await params;
-  const data = getLeadByLeadId(leadId);
+  let data = getLeadByLeadId(leadId);
   if (!data) notFound();
+
+  const ph = await fetchLeadPostHogEvents(leadId);
+  const suggested = suggestedStatusFromPostHog(data.lead.status, ph.events);
+  if (suggested && suggested !== data.lead.status) {
+    updateLead(leadId, { status: suggested });
+    data = getLeadByLeadId(leadId)!;
+  }
 
   const { lead, touches, events, briefs } = data;
   const phUrl = posthogPersonUrl(lead.lead_id);
@@ -19,7 +31,10 @@ export default async function LeadDetailPage({ params }: Props) {
   return (
     <div className="space-y-8">
       <div>
-        <Link href="/admin/dashboard" className="text-xs uppercase tracking-[0.15em] text-text-secondary hover:text-text">
+        <Link
+          href="/admin/dashboard"
+          className="text-xs uppercase tracking-[0.15em] text-text-secondary hover:text-text"
+        >
           ← Pipeline
         </Link>
         <div className="mt-4 flex flex-wrap items-center gap-3">
@@ -42,6 +57,8 @@ export default async function LeadDetailPage({ params }: Props) {
         <LeadEditor leadId={lead.lead_id} initial={lead} />
         <TouchList leadId={lead.lead_id} touches={touches} />
       </div>
+
+      <PostHogActivity events={ph.events} error={ph.error} personUrl={phUrl} />
 
       {briefs.length > 0 && (
         <section className="border border-border p-5">
@@ -78,17 +95,25 @@ export default async function LeadDetailPage({ params }: Props) {
       )}
 
       <section className="border border-border p-5">
-        <h2 className="text-[0.7rem] font-semibold uppercase tracking-[0.2em] text-text-secondary">Timeline</h2>
+        <h2 className="text-[0.7rem] font-semibold uppercase tracking-[0.2em] text-text-secondary">
+          CRM timeline
+        </h2>
         {events.length === 0 ? (
-          <p className="mt-4 text-sm text-text-secondary">No events yet — send the link and wait for a visit.</p>
+          <p className="mt-4 text-sm text-text-secondary">
+            No events yet — send the link and wait for a visit.
+          </p>
         ) : (
           <ol className="mt-4 space-y-3">
             {events.map((ev) => (
               <li key={ev.id} className="flex gap-4 border-l-2 border-border pl-4">
-                <time className="shrink-0 text-xs text-text-secondary">{formatDate(ev.created_at)}</time>
+                <time className="shrink-0 text-xs text-text-secondary">
+                  {formatDate(ev.created_at)}
+                </time>
                 <div>
                   <p className="text-sm">{ev.summary ?? ev.event_type}</p>
-                  {ev.touch_id && <p className="font-mono text-[0.65rem] text-text-secondary">{ev.touch_id}</p>}
+                  {ev.touch_id && (
+                    <p className="font-mono text-[0.65rem] text-text-secondary">{ev.touch_id}</p>
+                  )}
                 </div>
               </li>
             ))}

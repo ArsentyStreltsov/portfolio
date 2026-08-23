@@ -164,10 +164,17 @@ function PageViewTracker() {
 }
 
 function AnalyticsInner({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  const isAdmin = pathname?.startsWith("/admin") ?? false;
   const [consent, setConsent] = useState<ConsentStatus>("unknown");
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
+    if (isAdmin) {
+      setReady(true);
+      return;
+    }
+
     // Campaign link hit: server log only, no PostHog / no consent required.
     // Must run before URL tracking params are stripped.
     reportOutreachLinkHit();
@@ -191,11 +198,15 @@ function AnalyticsInner({ children }: { children: React.ReactNode }) {
       window.removeEventListener("analytics_consent_changed", onChange);
       window.removeEventListener("analytics_open_preferences", onOpenPrefs);
     };
-  }, []);
+  }, [isAdmin]);
 
-  const active = ready && consent === "granted";
+  const active = ready && !isAdmin && consent === "granted";
   useScrollDepth(active);
   useOutreachEngagement(active);
+
+  if (isAdmin) {
+    return <>{children}</>;
+  }
 
   return (
     <>
