@@ -29,11 +29,68 @@ function sortDescByDate<T extends { created_at?: string; updated_at?: string }>(
   return [...rows].sort((a, b) => (b[field] ?? "").localeCompare(a[field] ?? ""));
 }
 
-export function listLeads(status?: LeadStatus) {
+export type LeadSort = "updated" | "created" | "sent" | "name";
+
+export type ListLeadsOptions = {
+  status?: LeadStatus;
+  q?: string;
+  sort?: LeadSort;
+};
+
+function matchesSearch(lead: LeadRow, needle: string) {
+  const hay = [
+    lead.business_name,
+    lead.contact_name,
+    lead.email,
+    lead.phone,
+    lead.lead_id,
+    lead.notes,
+    lead.channel,
+    lead.campaign,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+  return hay.includes(needle);
+}
+
+function sortLeads(leads: LeadRow[], sort: LeadSort) {
+  const copy = [...leads];
+  switch (sort) {
+    case "name":
+      return copy.sort((a, b) => a.business_name.localeCompare(b.business_name, "en"));
+    case "created":
+      return copy.sort((a, b) => b.created_at.localeCompare(a.created_at));
+    case "sent":
+      return copy.sort((a, b) => {
+        if (!a.sent_at && !b.sent_at) return b.updated_at.localeCompare(a.updated_at);
+        if (!a.sent_at) return 1;
+        if (!b.sent_at) return -1;
+        return b.sent_at.localeCompare(a.sent_at);
+      });
+    case "updated":
+    default:
+      return copy.sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+  }
+}
+
+export function listLeads(options?: LeadStatus | ListLeadsOptions) {
+  const opts: ListLeadsOptions =
+    typeof options === "string" || options === undefined ? { status: options } : options;
+
   const store = readStore();
-  const leads = sortDescByDate(store.leads, "updated_at");
-  if (status) return leads.filter((l) => l.status === status);
-  return leads;
+  let leads = store.leads;
+
+  if (opts.q?.trim()) {
+    const needle = opts.q.trim().toLowerCase();
+    leads = leads.filter((l) => matchesSearch(l, needle));
+  }
+
+  if (opts.status) {
+    leads = leads.filter((l) => l.status === opts.status);
+  }
+
+  return sortLeads(leads, opts.sort ?? "updated");
 }
 
 export function getLeadByLeadId(leadId: string) {

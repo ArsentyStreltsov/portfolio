@@ -52,6 +52,15 @@ export function formatDate(iso: string | null | undefined) {
   }).format(new Date(iso));
 }
 
+export function dashboardUrl(params: { status?: string; q?: string; sort?: string }) {
+  const sp = new URLSearchParams();
+  if (params.status) sp.set("status", params.status);
+  if (params.q?.trim()) sp.set("q", params.q.trim());
+  if (params.sort && params.sort !== "updated") sp.set("sort", params.sort);
+  const qs = sp.toString();
+  return qs ? `/admin/dashboard?${qs}` : "/admin/dashboard";
+}
+
 export function posthogPersonUrl(leadId: string) {
   const projectId = process.env.NEXT_PUBLIC_POSTHOG_PROJECT_ID;
   if (!projectId) return null;

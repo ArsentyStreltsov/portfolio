@@ -1,25 +1,32 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { StatusGuide } from "@/components/admin/StatusGuide";
-import { getDashboardStats, listLeads } from "@/lib/crm/leads";
+import { LeadFilters } from "@/components/admin/LeadFilters";
+import { getDashboardStats, listLeads, type LeadSort } from "@/lib/crm/leads";
 import type { LeadStatus } from "@/lib/crm/db";
-import { formatDate, LEAD_STATUSES } from "@/lib/crm/ui";
+import { dashboardUrl, formatDate, LEAD_STATUSES } from "@/lib/crm/ui";
 
 type Props = {
-  searchParams: Promise<{ status?: string }>;
+  searchParams: Promise<{ status?: string; q?: string; sort?: string }>;
 };
 
+const SORT_VALUES: LeadSort[] = ["updated", "created", "sent", "name"];
+
 export default async function AdminDashboardPage({ searchParams }: Props) {
-  const { status: statusFilter } = await searchParams;
+  const { status: statusFilter, q, sort: sortParam } = await searchParams;
   const validStatus = LEAD_STATUSES.some((s) => s.value === statusFilter)
     ? (statusFilter as LeadStatus)
     : undefined;
+  const validSort = SORT_VALUES.includes(sortParam as LeadSort) ? (sortParam as LeadSort) : "updated";
 
   const stats = getDashboardStats();
-  const leads = listLeads(validStatus);
+  const allLeads = listLeads();
+  const leads = listLeads({ status: validStatus, q, sort: validSort });
 
   const today = new Date().toISOString().slice(0, 10);
-  const sentToday = leads.filter((l) => l.sent_at?.startsWith(today)).length;
+  const sentToday = allLeads.filter((l) => l.sent_at?.startsWith(today)).length;
+  const urlBase = { q, sort: validSort !== "updated" ? validSort : undefined };
 
   return (
     <div className="space-y-10">
@@ -40,15 +47,24 @@ export default async function AdminDashboardPage({ searchParams }: Props) {
 
       <StatusGuide />
 
+      <Suspense fallback={null}>
+        <LeadFilters total={stats.total} filtered={leads.length} />
+      </Suspense>
+
       <div className="flex flex-wrap gap-2">
-        <FilterChip href="/admin/dashboard" active={!validStatus} label="All" count={stats.total} />
+        <FilterChip
+          href={dashboardUrl(urlBase)}
+          active={!validStatus}
+          label="All"
+          count={stats.total}
+        />
         {LEAD_STATUSES.map((s) => {
           const count = stats.byStatus.find((b) => b.status === s.value)?.c ?? 0;
           if (count === 0 && validStatus !== s.value) return null;
           return (
             <FilterChip
               key={s.value}
-              href={`/admin/dashboard?status=${s.value}`}
+              href={dashboardUrl({ ...urlBase, status: s.value })}
               active={validStatus === s.value}
               label={s.label}
               count={count}
@@ -59,10 +75,21 @@ export default async function AdminDashboardPage({ searchParams }: Props) {
 
       {leads.length === 0 ? (
         <div className="border border-dashed border-border py-16 text-center">
-          <p className="text-text-secondary">No leads yet.</p>
-          <Link href="/admin/leads/new" className="mt-4 inline-block text-sm underline">
-            Add your first business
-          </Link>
+          {stats.total === 0 ? (
+            <>
+              <p className="text-text-secondary">No leads yet.</p>
+              <Link href="/admin/leads/new" className="mt-4 inline-block text-sm underline">
+                Add your first business
+              </Link>
+            </>
+          ) : (
+            <>
+              <p className="text-text-secondary">No leads match your filters.</p>
+              <Link href="/admin/dashboard" className="mt-4 inline-block text-sm underline">
+                Clear filters
+              </Link>
+            </>
+          )}
         </div>
       ) : (
         <div className="overflow-x-auto border border-border">
