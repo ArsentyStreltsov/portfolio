@@ -4,6 +4,7 @@ import { LeadEditor } from "@/components/admin/LeadEditor";
 import { TouchList } from "@/components/admin/TouchList";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { PostHogActivity } from "@/components/admin/PostHogActivity";
+import { EmailDraft } from "@/components/admin/EmailDraft";
 import { getLeadByLeadId, updateLead } from "@/lib/crm/leads";
 import { formatDate, posthogPersonUrl } from "@/lib/crm/ui";
 import {
@@ -57,6 +58,15 @@ export default async function LeadDetailPage({ params }: Props) {
         <LeadEditor leadId={lead.lead_id} initial={lead} />
         <TouchList leadId={lead.lead_id} campaign={lead.campaign} touches={touches} />
       </div>
+
+      <EmailDraft
+        leadId={lead.lead_id}
+        businessName={lead.business_name}
+        contactName={lead.contact_name}
+        email={lead.email}
+        campaign={lead.campaign}
+        touches={touches}
+      />
 
       <PostHogActivity events={ph.events} error={ph.error} personUrl={phUrl} />
 
