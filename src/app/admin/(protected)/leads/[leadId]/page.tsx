@@ -55,7 +55,7 @@ export default async function LeadDetailPage({ params }: Props) {
 
       <div className="grid gap-8 lg:grid-cols-2">
         <LeadEditor leadId={lead.lead_id} initial={lead} />
-        <TouchList leadId={lead.lead_id} touches={touches} />
+        <TouchList leadId={lead.lead_id} campaign={lead.campaign} touches={touches} />
       </div>
 
       <PostHogActivity events={ph.events} error={ph.error} personUrl={phUrl} />

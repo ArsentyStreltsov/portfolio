@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { CopyButton } from "@/components/admin/CopyButton";
+import { buildOutreachUrl } from "@/lib/crm/links";
 import { formatDate } from "@/lib/crm/ui";
 
 type Touch = {
@@ -15,9 +16,11 @@ type Touch = {
 
 export function TouchList({
   leadId,
+  campaign,
   touches,
 }: {
   leadId: string;
+  campaign?: string | null;
   touches: Touch[];
 }) {
   const router = useRouter();
@@ -40,9 +43,14 @@ export function TouchList({
   return (
     <div className="space-y-4 border border-border p-5">
       <div className="flex items-center justify-between gap-4">
-        <h2 className="text-[0.7rem] font-semibold uppercase tracking-[0.2em] text-text-secondary">
-          Outreach links
-        </h2>
+        <div>
+          <h2 className="text-[0.7rem] font-semibold uppercase tracking-[0.2em] text-text-secondary">
+            Outreach links
+          </h2>
+          <p className="mt-1 text-[0.65rem] text-text-secondary">
+            Short = lead_id only. Full adds touch + UTM (optional).
+          </p>
+        </div>
         <button
           type="button"
           disabled={loading === "new_touch"}
@@ -54,33 +62,51 @@ export function TouchList({
       </div>
 
       <ul className="space-y-4">
-        {touches.map((touch) => (
-          <li key={touch.touch_id} className="border border-border p-4">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <p className="font-mono text-sm">{touch.touch_id}</p>
-                <p className="mt-1 text-xs text-text-secondary">
-                  {touch.subject_variant ?? "—"} · created {formatDate(touch.created_at)}
-                  {touch.sent_at ? ` · sent ${formatDate(touch.sent_at)}` : " · not marked sent"}
-                </p>
+        {touches.map((touch) => {
+          const shortUrl = buildOutreachUrl({
+            leadId,
+            touchId: touch.touch_id,
+            campaign: campaign ?? undefined,
+            content: touch.subject_variant ?? undefined,
+            format: "short",
+          });
+          const fullUrl = buildOutreachUrl({
+            leadId,
+            touchId: touch.touch_id,
+            campaign: campaign ?? undefined,
+            content: touch.subject_variant ?? undefined,
+            format: "full",
+          });
+
+          return (
+            <li key={touch.touch_id} className="border border-border p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="font-mono text-sm">{touch.touch_id}</p>
+                  <p className="mt-1 text-xs text-text-secondary">
+                    {touch.subject_variant ?? "—"} · created {formatDate(touch.created_at)}
+                    {touch.sent_at ? ` · sent ${formatDate(touch.sent_at)}` : " · not marked sent"}
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <CopyButton text={shortUrl} label="Copy short" />
+                  <CopyButton text={fullUrl} label="Copy full" />
+                  {!touch.sent_at && (
+                    <button
+                      type="button"
+                      disabled={loading === "mark_touch_sent"}
+                      onClick={() => action({ action: "mark_touch_sent", touch_id: touch.touch_id })}
+                      className="bg-text text-bg px-3 py-1.5 text-[0.65rem] font-semibold uppercase tracking-[0.12em] disabled:opacity-40"
+                    >
+                      Mark sent
+                    </button>
+                  )}
+                </div>
               </div>
-              <div className="flex flex-wrap gap-2">
-                <CopyButton text={touch.outreach_url} label="Copy link" />
-                {!touch.sent_at && (
-                  <button
-                    type="button"
-                    disabled={loading === "mark_touch_sent"}
-                    onClick={() => action({ action: "mark_touch_sent", touch_id: touch.touch_id })}
-                    className="bg-text text-bg px-3 py-1.5 text-[0.65rem] font-semibold uppercase tracking-[0.12em] disabled:opacity-40"
-                  >
-                    Mark sent
-                  </button>
-                )}
-              </div>
-            </div>
-            <p className="mt-3 break-all font-mono text-[0.65rem] text-text-secondary">{touch.outreach_url}</p>
-          </li>
-        ))}
+              <p className="mt-3 break-all font-mono text-[0.65rem] text-text-secondary">{shortUrl}</p>
+            </li>
+          );
+        })}
       </ul>
     </div>
   );

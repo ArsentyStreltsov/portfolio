@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { StatusBadge } from "@/components/admin/StatusBadge";
+import { StatusGuide } from "@/components/admin/StatusGuide";
 import { getDashboardStats, listLeads } from "@/lib/crm/leads";
 import type { LeadStatus } from "@/lib/crm/db";
 import { formatDate, LEAD_STATUSES } from "@/lib/crm/ui";
@@ -36,6 +37,8 @@ export default async function AdminDashboardPage({ searchParams }: Props) {
           + New lead
         </Link>
       </div>
+
+      <StatusGuide />
 
       <div className="flex flex-wrap gap-2">
         <FilterChip href="/admin/dashboard" active={!validStatus} label="All" count={stats.total} />
