@@ -120,7 +120,15 @@ export function LeadFromUrl({ onExtracted }: { onExtracted: (data: ExtractPrefil
         <div className="mt-4 space-y-4 border-t border-border pt-4">
           <div className="space-y-1 text-xs text-text-secondary">
             <p>
-              Reviewing: <span className="font-mono">{result.website || url}</span>
+              Reviewing:{" "}
+              <a
+                href={result.website || url}
+                target="_blank"
+                rel="noreferrer"
+                className="font-mono underline hover:text-text"
+              >
+                {result.website || url}
+              </a>
             </p>
             {result.page_title ? <p>Title: {result.page_title}</p> : null}
             {result.page_description ? <p>Description: {result.page_description}</p> : null}
