@@ -1,6 +1,6 @@
 import { site } from "@/data/site";
 
-export type EmailTemplateId = "cold_v1" | "cold_short" | "followup_v1";
+export type EmailTemplateId = "cold_a" | "cold_b" | "followup_v1";
 
 export type EmailTemplate = {
   id: EmailTemplateId;
@@ -18,59 +18,66 @@ export type EmailMergeVars = {
   location: string;
 };
 
-/** Edit these — {{business_name}}, {{hello}}, {{outreach_url}}, {{my_name}}, … */
+/**
+ * A/B cold emails — keep short.
+ * Short outreach links use only ?lead_id=… (no utm). Variant is stored on the touch when marked sent.
+ *
+ * Vars: {{hello}}, {{outreach_url}}, {{my_name}}, {{my_first_name}}
+ */
 export const EMAIL_TEMPLATES: EmailTemplate[] = [
   {
-    id: "cold_v1",
-    label: "Cold email (default)",
-    subject: 'Want a website for "{{business_name}}" your competitors wish they had?',
+    id: "cold_a",
+    label: "A/B · A (competitors)",
+    subject: "Want a website your competitors wish they had?",
     body: `{{hello}}
 
-According to research from Google and Ipsos, 67% of consumers visit a brand or product’s website before making a purchase.
+Google/Ipsos research found that 67% of consumers visit a brand’s website before buying. If that first impression is weak, you can lose the customer before they ever contact you.
 
-That means having a strong online presence can be important for not losing potential customers early in their decision-making process and that’s exactly what I help businesses with.
+And that’s exactly where I help businesses. I build modern websites — fast, clear, and without agency pricing.
 
-I create modern, professional websites without long development timelines, complicated processes, or large agency budgets. The goal isn’t just to make something that looks nice, it’s to make it easier for potential customers to understand what you offer and take the next step.
-
-Here are a few examples of websites I’ve already worked on:
+A few examples:
 {{outreach_url}}
 
-I keep the whole process simple, fast, and reasonably priced.
-
-If you like the idea, I can send you a short brief with a few questions about your business and the style you like. It’ll help me understand what you need and make sure the website actually fits your business.
+If it might work for you, I can send a short brief to start the process!
 
 Would that be of interest?
+
 {{my_name}}`,
   },
   {
-    id: "cold_short",
-    label: "Cold email (short)",
-    subject: "{{business_name}} — website?",
+    id: "cold_b",
+    label: "A/B · B (67% hook)",
+    subject: "67% of buyers check your website before they buy",
     body: `{{hello}}
 
-Quick note — I help small businesses with modern websites. Thought {{business_name}} might find this useful:
+According to Google and Ipsos, 67% of consumers look up a brand or product’s website before making a purchase. So the website often decides whether they take the next step or leave.
 
+So if you’ve ever thought about giving your website a refresh, that’s exactly what I do — clean, professional sites without long timelines or big agency budgets.
+
+See some of my work here:
 {{outreach_url}}
 
-Happy to share ideas if timing is right.
+Happy to send a short brief if you want to explore this further.
 
+Thank you for your time!
 {{my_first_name}}`,
   },
   {
     id: "followup_v1",
     label: "Follow-up",
-    subject: "Re: {{business_name}} website",
+    subject: "Quick follow-up on the website note",
     body: `{{hello}}
 
-Just floating this again in case it got buried — here's my work for {{business_name}}:
-
+Just floating this again in case it got buried — a few website examples here:
 {{outreach_url}}
 
-No worries if now isn't the right time.
+No worries if the timing isn’t right.
 
 {{my_first_name}}`,
   },
 ];
+
+export const COLD_AB_TEMPLATE_IDS: EmailTemplateId[] = ["cold_a", "cold_b"];
 
 function applyVars(text: string, vars: Record<string, string>) {
   return text.replace(/\{\{(\w+)\}\}/g, (_, key: string) => vars[key] ?? "");

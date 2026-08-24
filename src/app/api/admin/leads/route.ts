@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdminSession } from "@/lib/admin/session";
 import type { LeadStatus } from "@/lib/crm/db";
+import { findLikelyDuplicates } from "@/lib/crm/duplicates";
 import {
   createFollowUpTouch,
   createLead,
@@ -41,14 +42,32 @@ export async function POST(request: NextRequest) {
     campaign?: string;
     notes?: string;
     subject_variant?: string;
+    allow_duplicate?: boolean;
   };
 
   if (!body.business_name?.trim()) {
     return NextResponse.json({ error: "business_name required" }, { status: 400 });
   }
 
+  const duplicates = findLikelyDuplicates({
+    business_name: body.business_name,
+    website: body.website,
+    email: body.email,
+    phone: body.phone,
+  });
+
+  if (duplicates.length > 0 && !body.allow_duplicate) {
+    return NextResponse.json(
+      {
+        error: "Possible duplicate lead",
+        duplicates,
+      },
+      { status: 409 },
+    );
+  }
+
   const lead = createLead({ ...body, business_name: body.business_name.trim() });
-  return NextResponse.json({ lead }, { status: 201 });
+  return NextResponse.json({ lead, duplicates }, { status: 201 });
 }
 
 export async function PATCH(request: NextRequest) {
@@ -68,7 +87,7 @@ export async function PATCH(request: NextRequest) {
   }
 
   if (body.action === "mark_touch_sent" && body.touch_id) {
-    const lead = markTouchSent(body.touch_id);
+    const lead = markTouchSent(body.touch_id, body.subject_variant);
     if (!lead) return NextResponse.json({ error: "Touch not found" }, { status: 404 });
     return NextResponse.json({ lead });
   }

@@ -18,6 +18,12 @@ type Touch = {
   sent_at: string | null;
 };
 
+function initialTemplate(touch?: Touch | null): EmailTemplateId {
+  const v = touch?.subject_variant;
+  if (v === "cold_a" || v === "cold_b" || v === "followup_v1") return v;
+  return "cold_a";
+}
+
 export function EmailDraft({
   leadId,
   businessName,
@@ -34,9 +40,9 @@ export function EmailDraft({
   touches: Touch[];
 }) {
   const router = useRouter();
-  const [templateId, setTemplateId] = useState<EmailTemplateId>("cold_v1");
-  const [marking, setMarking] = useState(false);
   const primaryTouch = touches[0];
+  const [templateId, setTemplateId] = useState<EmailTemplateId>(() => initialTemplate(primaryTouch));
+  const [marking, setMarking] = useState(false);
 
   const outreachUrl = useMemo(() => {
     if (!primaryTouch) return "";
@@ -44,10 +50,10 @@ export function EmailDraft({
       leadId,
       touchId: primaryTouch.touch_id,
       campaign: campaign ?? undefined,
-      content: primaryTouch.subject_variant ?? undefined,
+      content: templateId,
       format: "short",
     });
-  }, [leadId, primaryTouch, campaign]);
+  }, [leadId, primaryTouch, campaign, templateId]);
 
   const template = EMAIL_TEMPLATES.find((t) => t.id === templateId) ?? EMAIL_TEMPLATES[0]!;
   const draft = renderEmailTemplate(template, {
@@ -57,9 +63,7 @@ export function EmailDraft({
   });
 
   const gmailUrl =
-    email && draft.subject
-      ? gmailComposeUrl(email, draft.subject, draft.body)
-      : null;
+    email && draft.subject ? gmailComposeUrl(email, draft.subject, draft.body) : null;
 
   const markSent = async () => {
     if (!primaryTouch || primaryTouch.sent_at) return;
@@ -72,6 +76,7 @@ export function EmailDraft({
           lead_id: leadId,
           action: "mark_touch_sent",
           touch_id: primaryTouch.touch_id,
+          subject_variant: templateId,
         }),
       });
       router.refresh();
@@ -98,6 +103,11 @@ export function EmailDraft({
           <h2 className="text-[0.7rem] font-semibold uppercase tracking-[0.2em] text-text-secondary">
             Email draft
           </h2>
+          <p className="mt-1 text-xs text-text-secondary">
+            A/B: switch variant — subject and body update together. The link stays short (
+            <span className="font-mono">?lead_id=…</span> only); the variant is saved when you mark
+            sent.
+          </p>
         </div>
         <select
           value={templateId}

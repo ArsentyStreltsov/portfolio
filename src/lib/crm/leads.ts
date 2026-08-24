@@ -113,7 +113,7 @@ export function createLead(input: LeadInput) {
   const lead_id = generateLeadId();
   const ts = nowIso();
   const campaign = input.campaign ?? "se_websites_2026";
-  const subject_variant = input.subject_variant ?? "email_v1";
+  const subject_variant = input.subject_variant ?? "cold_a";
   const touch_id = nextTouchId(lead_id, 0);
   const outreach_url = buildOutreachUrl({
     leadId: lead_id,
@@ -283,14 +283,25 @@ export function createFollowUpTouch(leadId: string, subject_variant?: string) {
   return getLeadByLeadId(leadId);
 }
 
-export function markTouchSent(touchId: string) {
+export function markTouchSent(touchId: string, subjectVariant?: string) {
   const touch = readStore().touches.find((t) => t.touch_id === touchId);
   if (!touch) return null;
   const ts = nowIso();
+  const lead = readStore().leads.find((l) => l.lead_id === touch.lead_id);
+  const variant = subjectVariant?.trim() || touch.subject_variant || "cold_a";
 
   writeStore((store) => {
     const t = store.touches.find((x) => x.touch_id === touchId);
-    if (t) t.sent_at = ts;
+    if (!t) return;
+    t.sent_at = ts;
+    t.subject_variant = variant;
+    t.outreach_url = buildOutreachUrl({
+      leadId: t.lead_id,
+      touchId,
+      campaign: lead?.campaign ?? undefined,
+      content: variant,
+      format: "short",
+    });
   });
 
   updateLead(touch.lead_id, { status: "sent", sent_at: ts });
@@ -300,7 +311,8 @@ export function markTouchSent(touchId: string) {
       lead_id: touch.lead_id,
       touch_id: touchId,
       event_type: "email_marked_sent",
-      summary: "Marked as sent",
+      summary: `Marked as sent (${variant})`,
+      payload: { subject_variant: variant },
     });
   });
 

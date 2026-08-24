@@ -18,7 +18,7 @@ export function buildOutreachUrl({
   leadId,
   touchId,
   campaign = "se_websites_2026",
-  content = "email_v1",
+  content = "cold_a",
   format = "short",
 }: OutreachLinkParams) {
   const base = getSiteUrl();
