@@ -9,6 +9,7 @@ type Props = {
   leadId: string;
   initial: {
     business_name: string;
+    website: string | null;
     contact_name: string | null;
     email: string | null;
     phone: string | null;
@@ -67,6 +68,12 @@ export function LeadEditor({ leadId, initial }: Props) {
         className="w-full border-b border-border bg-transparent py-2 font-display text-xl font-bold uppercase"
       />
       <div className="grid gap-3 sm:grid-cols-2">
+        <input
+          placeholder="Website"
+          value={form.website ?? ""}
+          onChange={(e) => setForm({ ...form, website: e.target.value || null })}
+          className="border border-border px-3 py-2 text-sm outline-none focus:border-text"
+        />
         <input
           placeholder="Contact name"
           value={form.contact_name ?? ""}

@@ -12,6 +12,7 @@ import { nextRowId, readStore, writeStore } from "./store";
 
 export type LeadInput = {
   business_name: string;
+  website?: string;
   contact_name?: string;
   email?: string;
   phone?: string;
@@ -40,6 +41,7 @@ export type ListLeadsOptions = {
 function matchesSearch(lead: LeadRow, needle: string) {
   const hay = [
     lead.business_name,
+    lead.website,
     lead.contact_name,
     lead.email,
     lead.phone,
@@ -125,6 +127,7 @@ export function createLead(input: LeadInput) {
       id: nextRowId(store, "lead"),
       lead_id,
       business_name: input.business_name.trim(),
+      website: input.website?.trim() || null,
       contact_name: input.contact_name?.trim() || null,
       email: input.email?.trim() || null,
       phone: input.phone?.trim() || null,
@@ -196,7 +199,16 @@ export function updateLead(
   patch: Partial<
     Pick<
       LeadRow,
-      "business_name" | "contact_name" | "email" | "phone" | "channel" | "status" | "campaign" | "notes" | "sent_at"
+      | "business_name"
+      | "website"
+      | "contact_name"
+      | "email"
+      | "phone"
+      | "channel"
+      | "status"
+      | "campaign"
+      | "notes"
+      | "sent_at"
     >
   >,
 ) {
@@ -210,6 +222,7 @@ export function updateLead(
     store.leads[idx] = {
       ...existing,
       business_name: patch.business_name ?? existing.business_name,
+      website: patch.website !== undefined ? patch.website : existing.website,
       contact_name: patch.contact_name !== undefined ? patch.contact_name : existing.contact_name,
       email: patch.email !== undefined ? patch.email : existing.email,
       phone: patch.phone !== undefined ? patch.phone : existing.phone,

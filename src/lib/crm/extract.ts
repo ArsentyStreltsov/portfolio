@@ -1,5 +1,12 @@
 /** Extract public business contact signals from a website HTML (no LLM). */
 
+export type ExtractEvidence = {
+  value: string;
+  source: string;
+  snippet: string;
+  page_url: string;
+};
+
 export type ExtractedLead = {
   business_name: string;
   contact_name: string;
@@ -9,6 +16,12 @@ export type ExtractedLead = {
   notes: string;
   signals: string[];
   contact_urls: string[];
+  page_title: string;
+  page_description: string;
+  business_name_evidence: ExtractEvidence[];
+  contact_name_evidence: ExtractEvidence[];
+  email_evidence: ExtractEvidence[];
+  phone_evidence: ExtractEvidence[];
 };
 
 const EMAIL_RE = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
@@ -53,6 +66,28 @@ function titleTag(html: string) {
 function firstH1(html: string) {
   const m = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
   return m ? stripTags(m[1]!) : "";
+}
+
+function clipSnippet(text: string, max = 180) {
+  return text.replace(/\s+/g, " ").trim().slice(0, max);
+}
+
+function pushEvidence(
+  list: ExtractEvidence[],
+  value: string | undefined,
+  source: string,
+  snippet: string,
+  pageUrl: string,
+) {
+  const clean = value?.trim();
+  if (!clean) return;
+  if (list.some((item) => item.value.toLowerCase() === clean.toLowerCase())) return;
+  list.push({
+    value: clean.slice(0, 200),
+    source,
+    snippet: clipSnippet(snippet || clean),
+    page_url: pageUrl,
+  });
 }
 
 function cleanBusinessName(raw: string) {
@@ -160,24 +195,43 @@ export function extractLeadFromHtml(html: string, pageUrl: string): ExtractedLea
   let email = "";
   let phone = "";
   const noteBits: string[] = [`Source: ${pageUrl}`];
+  const business_name_evidence: ExtractEvidence[] = [];
+  const contact_name_evidence: ExtractEvidence[] = [];
+  const email_evidence: ExtractEvidence[] = [];
+  const phone_evidence: ExtractEvidence[] = [];
 
   const ld = extractJsonLd(html);
   const org =
     ld.find((o) => typeIncludes(o, "LocalBusiness", "Organization", "Corporation", "Store")) ??
     ld.find((o) => typeof o.name === "string");
 
+  const title = titleTag(html);
+  const h1 = firstH1(html);
+  const ogTitle = metaContent(html, "og:title");
+  const siteName = metaContent(html, "og:site_name");
+  const desc = metaContent(html, "description") || metaContent(html, "og:description");
+
   if (org) {
     if (typeof org.name === "string" && org.name.trim()) {
       business_name = cleanBusinessName(org.name);
       signals.push("json-ld name");
+      pushEvidence(
+        business_name_evidence,
+        business_name,
+        "JSON-LD organization name",
+        typeof org.description === "string" ? org.description : org.name,
+        pageUrl,
+      );
     }
     if (typeof org.email === "string") {
       email = org.email.replace(/^mailto:/i, "").trim();
       signals.push("json-ld email");
+      pushEvidence(email_evidence, email, "JSON-LD email", String(org.email), pageUrl);
     }
     if (typeof org.telephone === "string") {
       phone = org.telephone.trim();
       signals.push("json-ld phone");
+      pushEvidence(phone_evidence, phone, "JSON-LD telephone", String(org.telephone), pageUrl);
     }
     const founder = org.founder ?? org.employee;
     if (founder && typeof founder === "object" && !Array.isArray(founder)) {
@@ -185,6 +239,7 @@ export function extractLeadFromHtml(html: string, pageUrl: string): ExtractedLea
       if (n) {
         contact_name = n;
         signals.push("json-ld person");
+        pushEvidence(contact_name_evidence, contact_name, "JSON-LD person", n, pageUrl);
       }
     }
     if (typeof org.description === "string" && org.description.trim()) {
@@ -200,29 +255,28 @@ export function extractLeadFromHtml(html: string, pageUrl: string): ExtractedLea
     }
   }
 
-  const ogTitle = metaContent(html, "og:title");
-  const siteName = metaContent(html, "og:site_name");
-  const desc = metaContent(html, "description") || metaContent(html, "og:description");
   if (!business_name && siteName) {
     business_name = cleanBusinessName(siteName);
     signals.push("og:site_name");
+    pushEvidence(business_name_evidence, business_name, "Open Graph site name", siteName, pageUrl);
   }
   if (!business_name && ogTitle) {
     business_name = cleanBusinessName(ogTitle);
     signals.push("og:title");
+    pushEvidence(business_name_evidence, business_name, "Open Graph title", ogTitle, pageUrl);
   }
   if (!business_name) {
-    const t = titleTag(html);
-    if (t) {
-      business_name = cleanBusinessName(t);
+    if (title) {
+      business_name = cleanBusinessName(title);
       signals.push("title");
+      pushEvidence(business_name_evidence, business_name, "Page title", title, pageUrl);
     }
   }
   if (!business_name) {
-    const h1 = firstH1(html);
     if (h1) {
       business_name = cleanBusinessName(h1);
       signals.push("h1");
+      pushEvidence(business_name_evidence, business_name, "First H1", h1, pageUrl);
     }
   }
   if (desc && !noteBits.some((n) => n.includes(desc.slice(0, 40)))) {
@@ -234,12 +288,21 @@ export function extractLeadFromHtml(html: string, pageUrl: string): ExtractedLea
     email = emails[0];
     signals.push("email on page");
   }
+  for (const candidate of emails) {
+    const match = html.match(new RegExp(`.{0,60}${candidate.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}.{0,60}`, "i"));
+    pushEvidence(email_evidence, candidate, "Email found on page", match?.[0] ?? candidate, pageUrl);
+  }
   if (emails.length > 1) noteBits.push(`Other emails: ${emails.slice(1).join(", ")}`);
 
   const phones = pickPhones(html);
   if (!phone && phones[0]) {
     phone = phones[0];
     signals.push("phone on page");
+  }
+  for (const candidate of phones) {
+    const escaped = candidate.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const match = html.match(new RegExp(`.{0,60}${escaped}.{0,60}`, "i"));
+    pushEvidence(phone_evidence, candidate, "Phone found on page", match?.[0] ?? candidate, pageUrl);
   }
   if (phones.length > 1) noteBits.push(`Other phones: ${phones.slice(1).join(", ")}`);
 
@@ -255,6 +318,7 @@ export function extractLeadFromHtml(html: string, pageUrl: string): ExtractedLea
         .map((p) => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase())
         .join(" ");
       signals.push("name from email");
+      pushEvidence(contact_name_evidence, contact_name, "Guessed from email", email, pageUrl);
     }
   }
 
@@ -267,6 +331,12 @@ export function extractLeadFromHtml(html: string, pageUrl: string): ExtractedLea
     notes: noteBits.join("\n"),
     signals,
     contact_urls: contactLinks,
+    page_title: title,
+    page_description: desc,
+    business_name_evidence,
+    contact_name_evidence,
+    email_evidence,
+    phone_evidence,
   };
 }
 

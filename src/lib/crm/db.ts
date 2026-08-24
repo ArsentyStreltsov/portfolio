@@ -14,6 +14,7 @@ export type LeadRow = {
   id: number;
   lead_id: string;
   business_name: string;
+  website: string | null;
   contact_name: string | null;
   email: string | null;
   phone: string | null;

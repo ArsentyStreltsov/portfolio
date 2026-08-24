@@ -32,6 +32,7 @@ export async function POST(request: NextRequest) {
 
   const body = (await request.json()) as {
     business_name?: string;
+    website?: string;
     contact_name?: string;
     email?: string;
     phone?: string;

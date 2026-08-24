@@ -46,6 +46,11 @@ export default async function LeadDetailPage({ params }: Props) {
         <div className="mt-3 flex flex-wrap gap-4 text-xs text-text-secondary">
           <span>Created {formatDate(lead.created_at)}</span>
           {lead.sent_at && <span>First sent {formatDate(lead.sent_at)}</span>}
+          {lead.website && (
+            <a href={lead.website} target="_blank" rel="noreferrer" className="underline hover:text-text">
+              Visit business site →
+            </a>
+          )}
           {phUrl && (
             <a href={phUrl} target="_blank" rel="noreferrer" className="underline hover:text-text">
               Open in PostHog →

@@ -12,6 +12,7 @@ export function NewLeadForm() {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     business_name: "",
+    website: "",
     contact_name: "",
     email: "",
     phone: "",
@@ -53,6 +54,7 @@ export function NewLeadForm() {
           setForm((prev) => ({
             ...prev,
             business_name: data.business_name || prev.business_name,
+            website: data.website || prev.website,
             contact_name: data.contact_name || prev.contact_name,
             email: data.email || prev.email,
             phone: data.phone || prev.phone,
@@ -71,6 +73,12 @@ export function NewLeadForm() {
           label="Business name *"
           value={form.business_name}
           onChange={(v) => setForm({ ...form, business_name: v })}
+        />
+        <Field
+          label="Website"
+          value={form.website}
+          onChange={(v) => setForm({ ...form, website: v })}
+          type="url"
         />
         <div className="grid gap-6 sm:grid-cols-2">
           <Field

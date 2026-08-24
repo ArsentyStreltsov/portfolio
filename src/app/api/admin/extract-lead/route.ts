@@ -66,6 +66,12 @@ function mergeExtract(primary: ExtractedLead, secondary: ExtractedLead): Extract
       .slice(0, 2000),
     signals: [...new Set([...primary.signals, ...secondary.signals.map((s) => `contact: ${s}`)])],
     contact_urls: [...new Set([...(primary.contact_urls ?? []), ...(secondary.contact_urls ?? [])])],
+    page_title: primary.page_title || secondary.page_title,
+    page_description: primary.page_description || secondary.page_description,
+    business_name_evidence: [...primary.business_name_evidence, ...secondary.business_name_evidence],
+    contact_name_evidence: [...primary.contact_name_evidence, ...secondary.contact_name_evidence],
+    email_evidence: [...primary.email_evidence, ...secondary.email_evidence],
+    phone_evidence: [...primary.phone_evidence, ...secondary.phone_evidence],
   };
 }
 
@@ -78,20 +84,34 @@ export async function POST(request: NextRequest) {
   if (!limited.ok) return rateLimitResponse(limited.retryAfterSec);
 
   try {
-    const body = (await request.json()) as { url?: string };
+    const body = (await request.json()) as { url?: string; mode?: "home" | "contact"; target_url?: string };
     const url = normalizeWebsiteUrl(body.url ?? "");
 
-    const { html, finalUrl } = await fetchHtml(url);
-    let extracted = extractLeadFromHtml(html, finalUrl);
+    const mode = body.mode ?? "home";
+    const first = await fetchHtml(url);
+    let extracted = extractLeadFromHtml(first.html, first.finalUrl);
+    let usedMode: "home" | "contact" = "home";
+    let triedContactPage = false;
 
-    // If key contacts missing, try first contact-like page
-    if ((!extracted.email || !extracted.phone) && extracted.contact_urls[0]) {
+    if (mode === "contact") {
+      const target = body.target_url
+        ? normalizeWebsiteUrl(body.target_url)
+        : extracted.contact_urls[0]
+          ? normalizeWebsiteUrl(extracted.contact_urls[0])
+          : null;
+      if (target && target.toString() !== first.finalUrl) {
+        const second = await fetchHtml(target);
+        extracted = mergeExtract(extracted, extractLeadFromHtml(second.html, second.finalUrl));
+        usedMode = "contact";
+        triedContactPage = true;
+      }
+    } else if ((!extracted.email || !extracted.phone) && extracted.contact_urls[0]) {
+      triedContactPage = true;
       try {
         const contactUrl = normalizeWebsiteUrl(extracted.contact_urls[0]!);
-        if (contactUrl.toString() !== finalUrl) {
+        if (contactUrl.toString() !== first.finalUrl) {
           const second = await fetchHtml(contactUrl);
-          const more = extractLeadFromHtml(second.html, second.finalUrl);
-          extracted = mergeExtract(extracted, more);
+          extracted = mergeExtract(extracted, extractLeadFromHtml(second.html, second.finalUrl));
         }
       } catch {
         // contact page optional
@@ -101,7 +121,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       ok: true,
       extracted,
-      fetched_url: finalUrl,
+      fetched_url: first.finalUrl,
+      used_mode: usedMode,
+      can_retry_contact: Boolean(extracted.contact_urls[0] && usedMode !== "contact"),
+      retried_contact: triedContactPage && usedMode === "contact",
     });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Extract failed";
