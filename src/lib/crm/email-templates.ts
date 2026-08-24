@@ -41,7 +41,6 @@ A few examples:
 If it might work for you, I can send a short brief to start the process!
 
 Would that be of interest?
-
 {{my_name}}`,
   },
   {
