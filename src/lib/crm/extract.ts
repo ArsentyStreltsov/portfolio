@@ -25,12 +25,17 @@ export type ExtractedLead = {
 };
 
 const EMAIL_RE = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
-const PHONE_RE =
-  /(?:\+|00)?(?:46|45|47)?[\s.-]?(?:\(?0\)?[\s.-]?)?(?:\d[\s.-]?){6,12}\d/g;
+const PHONE_SEP = String.raw`[\s.\-–—−]`;
+const PHONE_RE = new RegExp(
+  String.raw`(?:\+|00)?(?:46|45|47)?${PHONE_SEP}*(?:\(?0\)?${PHONE_SEP}*)?(?:\d${PHONE_SEP}*){6,12}\d`,
+  "g",
+);
 const JUNK_EMAIL = /noreply|no-reply|donotreply|example\.|sentry\.|wixpress|wordpress|cloudflare|schema\.org/i;
 const JUNK_PHONE_START = /^0{3,}|^12345/;
 const DATE_LIKE_RE = /\b\d{1,4}[./-]\d{1,2}[./-]\d{1,4}\b/;
-const PHONE_CONTEXT_RE = /telefon|phone|tel|ring|call|kontakta|kontakt|reach us|call us/i;
+const PHONE_CONTEXT_RE = /\btelefon\b|\bphone\b|\btel\b|\bring\b|\bcall\b|\bkontakta\b|\bkontakt\b|reach us|call us/i;
+const TECH_PHONE_CONTEXT_RE =
+  /appid|uuid|guid|monitoringcomponent|panorama|module_metadata|sentry|gtm-|googletag|webpack/i;
 const EMAIL_CONTEXT_RE = /email|e-post|maila|mail us|kontakt|contact/i;
 const FOOTER_HINT_RE = /footer|copyright|all rights reserved|opening hours|öppettider/i;
 
@@ -44,6 +49,9 @@ function decodeHtml(s: string) {
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
     .replace(/&nbsp;/g, " ")
+    .replace(/&ndash;/gi, "-")
+    .replace(/&mdash;/gi, "-")
+    .replace(/&minus;/gi, "-")
     .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
     .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCharCode(parseInt(h, 16)));
 }
@@ -157,7 +165,15 @@ function normalizePhone(raw: string) {
   const cleaned = raw.replace(/[^\d+]/g, "");
   if (cleaned.length < 8 || cleaned.length > 15) return null;
   if (JUNK_PHONE_START.test(cleaned.replace(/^\+/, ""))) return null;
-  return raw.replace(/\s+/g, " ").trim().slice(0, 40);
+  return raw.replace(/[\u2013\u2014\u2212]/g, "-").replace(/\s+/g, " ").trim().slice(0, 40);
+}
+
+function isPlausibleNordicPhone(value: string) {
+  const d = value.replace(/[^\d]/g, "");
+  if (d.length < 8 || d.length > 13) return false;
+  if (/^(?:46|45|47)/.test(d) && d.length >= 10) return true;
+  if (/^0[1-9]/.test(d) && d.length >= 8 && d.length <= 11) return true;
+  return false;
 }
 
 function pickPhones(html: string, limit = 3) {
@@ -198,6 +214,53 @@ function footerHtml(html: string) {
   return html.match(/<footer[^>]*>([\s\S]*?)<\/footer>/i)?.[1] ?? "";
 }
 
+/** SVG path data (d="M504 256C504 119...") looks like phone numbers. */
+function stripSvgNoise(html: string) {
+  return html
+    .replace(/<svg\b[\s\S]*?<\/svg>/gi, " ")
+    .replace(/<svg\b[^>]*>/gi, " ")
+    .replace(/\s(?:d|viewbox|points|cx|cy|r|x|y|x1|y1|x2|y2|transform)=["'][^"']*["']/gi, " ")
+    .replace(/<(?:path|polygon|polyline|circle|ellipse|line|rect)\b[^>]*>/gi, " ");
+}
+
+function htmlForPhoneScan(html: string) {
+  return stripSvgNoise(
+    decodeHtml(html)
+      .replace(/<script(?![^>]*ld\+json)[\s\S]*?<\/script>/gi, " ")
+      .replace(/<style[\s\S]*?<\/style>/gi, " ")
+      // Inline CSS (margin:-20px) and element ids look like phone numbers.
+      .replace(/\sstyle=["'][^"']*["']/gi, " ")
+      .replace(/\sid=["'][^"']*["']/gi, " ")
+      .replace(/[\u2013\u2014\u2212]/g, "-"),
+  );
+}
+
+function looksLikeSvgPath(snippet: string, raw: string) {
+  const s = snippet.toLowerCase();
+  if (/xmlns=["']http:\/\/www\.w3\.org\/2000\/svg|<\/?svg\b|path d=|<path\b/i.test(s)) return true;
+  if (/[mlcqazhvst][\s\d.,-]+[mlcqazhvst]/i.test(raw) && /svg|path/i.test(s)) return true;
+  return false;
+}
+
+/** Coordinate leftovers like "8 119 8 256" from SVG path commands. */
+function looksLikeCoordinatePhone(raw: string) {
+  const t = raw.trim();
+  if (/[mlcqazhvst]/i.test(t)) return true;
+  const startsLikePhone = /^(?:\+|00)|^(?:46|45|47)|^0/.test(t.replace(/\s/g, ""));
+  if (startsLikePhone) return false;
+  return /^[1-9]\d{0,2}(?:[\s.]+\d{1,3}){2,}$/.test(t);
+}
+
+function looksLikeTechId(html: string, index: number, raw: string, snippet: string) {
+  const around = html.slice(Math.max(0, index - 48), index + raw.length + 48);
+  if (TECH_PHONE_CONTEXT_RE.test(around) || TECH_PHONE_CONTEXT_RE.test(snippet)) return true;
+  if (/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}/i.test(around)) return true;
+  const before = html[index - 1] ?? "";
+  const after = html[index + raw.length] ?? "";
+  if (/[A-Za-z0-9_]/i.test(before) || /[A-Za-z0-9_]/i.test(after)) return true;
+  return false;
+}
+
 function scoreEmail(value: string, snippet: string, source: string) {
   let score = 0;
   const local = value.split("@")[0]?.toLowerCase() ?? "";
@@ -216,9 +279,13 @@ function scorePhone(value: string, snippet: string, source: string) {
   const digits = value.replace(/[^\d]/g, "");
   const s = snippet.toLowerCase();
   if (digits.length >= 8 && digits.length <= 12) score += 3;
+  if (isPlausibleNordicPhone(value)) score += 8;
+  else score -= 12;
+  if (/[\s.\-]/.test(value) && /\d/.test(value)) score += 4;
   if (PHONE_CONTEXT_RE.test(s)) score += 6;
   if (/tel:/i.test(source)) score += 2;
   if (FOOTER_HINT_RE.test(s) || /footer/i.test(source)) score += 2;
+  if (TECH_PHONE_CONTEXT_RE.test(s)) score -= 20;
   return score;
 }
 
@@ -267,25 +334,47 @@ function collectEmailEvidence(html: string, pageUrl: string, footer = "") {
 
 function collectPhoneEvidence(html: string, pageUrl: string, footer = "") {
   const out: ScoredEvidence[] = [];
-  for (const m of html.matchAll(/tel:([^"'\s>]+)/gi)) {
-    const raw = decodeURIComponent(m[1]!).replace(/[^\d+]/g, "");
-    const value = normalizePhone(raw);
-    if (!value) continue;
-    const snippet = clipSnippet(stripTags(html.slice(Math.max(0, m.index! - 80), m.index! + 120)));
-    out.push({
-      value,
-      source: "tel link",
-      snippet,
-      page_url: pageUrl,
-      score: scorePhone(value, snippet, "tel"),
-    });
+  const searchable = htmlForPhoneScan(html);
+  const searchableFooter = htmlForPhoneScan(footer);
+
+  // Quoted tel: hrefs may contain spaces: tel:042 - 21 30 60
+  const telPatterns = [
+    /href=["']tel:([^"']+)["']/gi,
+    /tel:([+\d][\d\s.\-–—−()]{5,})/gi,
+  ];
+  for (const re of telPatterns) {
+    for (const m of searchable.matchAll(re)) {
+      const raw = decodeURIComponent(m[1]!).trim();
+      const value = normalizePhone(raw);
+      if (!value || !isPlausibleNordicPhone(value)) continue;
+      const snippet = clipSnippet(
+        stripTags(searchable.slice(Math.max(0, m.index! - 80), m.index! + 140)),
+      );
+      if (looksLikeSvgPath(snippet, raw) || looksLikeTechId(searchable, m.index!, m[0]!, snippet)) {
+        continue;
+      }
+      out.push({
+        value,
+        source: "tel link",
+        snippet,
+        page_url: pageUrl,
+        score: scorePhone(value, snippet, "tel") + 6,
+      });
+    }
   }
-  for (const m of html.matchAll(PHONE_RE)) {
+  PHONE_RE.lastIndex = 0;
+  for (const m of searchable.matchAll(PHONE_RE)) {
+    const start = m.index! + (m[0]!.length - m[0]!.trimStart().length);
     const raw = m[0]!.trim();
     if (DATE_LIKE_RE.test(raw)) continue;
+    if (/^-/.test(raw)) continue;
     const value = normalizePhone(raw);
     if (!value) continue;
-    const snippet = clipSnippet(stripTags(html.slice(Math.max(0, m.index! - 80), m.index! + 120)));
+    if (looksLikeCoordinatePhone(raw)) continue;
+    if (!isPlausibleNordicPhone(value)) continue;
+    const snippet = clipSnippet(stripTags(searchable.slice(Math.max(0, start - 80), start + 120)));
+    if (looksLikeSvgPath(snippet, raw)) continue;
+    if (looksLikeTechId(searchable, start, raw, snippet)) continue;
     if (DATE_LIKE_RE.test(snippet) && !PHONE_CONTEXT_RE.test(snippet)) continue;
     out.push({
       value,
@@ -295,13 +384,22 @@ function collectPhoneEvidence(html: string, pageUrl: string, footer = "") {
       score: scorePhone(value, snippet, "text"),
     });
   }
-  if (footer) {
-    for (const m of footer.matchAll(PHONE_RE)) {
+  if (searchableFooter) {
+    PHONE_RE.lastIndex = 0;
+    for (const m of searchableFooter.matchAll(PHONE_RE)) {
+      const start = m.index! + (m[0]!.length - m[0]!.trimStart().length);
       const raw = m[0]!.trim();
       if (DATE_LIKE_RE.test(raw)) continue;
+      if (/^-/.test(raw)) continue;
       const value = normalizePhone(raw);
       if (!value) continue;
-      const snippet = clipSnippet(stripTags(footer.slice(Math.max(0, m.index! - 80), m.index! + 120)));
+      if (looksLikeCoordinatePhone(raw)) continue;
+      if (!isPlausibleNordicPhone(value)) continue;
+      const snippet = clipSnippet(
+        stripTags(searchableFooter.slice(Math.max(0, start - 80), start + 120)),
+      );
+      if (looksLikeSvgPath(snippet, raw)) continue;
+      if (looksLikeTechId(searchableFooter, start, raw, snippet)) continue;
       out.push({
         value,
         source: "footer phone",
@@ -433,7 +531,7 @@ export function extractLeadFromHtml(html: string, pageUrl: string): ExtractedLea
   if (emails.length > 1) noteBits.push(`Other emails: ${emails.slice(1).map((e) => e.value).join(", ")}`);
 
   const phones = collectPhoneEvidence(html, pageUrl, footer);
-  if (!phone && phones[0]) {
+  if (!phone && phones[0] && phones[0].score > 0) {
     phone = phones[0].value;
     signals.push("phone on page");
   }

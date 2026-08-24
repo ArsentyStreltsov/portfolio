@@ -364,15 +364,62 @@ export function saveBrief(input: {
   }
 }
 
+export function dateKeyStockholm(isoOrDate: string | Date = new Date()) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Stockholm",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(typeof isoOrDate === "string" ? new Date(isoOrDate) : isoOrDate);
+}
+
 export function getDashboardStats() {
   const store = readStore();
   const total = store.leads.length;
-  const counts = new Map<string, number>();
+  const counts = new Map<LeadStatus, number>();
   for (const lead of store.leads) {
     counts.set(lead.status, (counts.get(lead.status) ?? 0) + 1);
   }
   const byStatus = [...counts.entries()].map(([status, c]) => ({ status, c }));
+
+  const today = dateKeyStockholm();
+  const createdToday = store.leads.filter((l) => dateKeyStockholm(l.created_at) === today).length;
+  const sentToday = store.leads.filter((l) => l.sent_at && dateKeyStockholm(l.sent_at) === today).length;
+  const briefsToday = store.briefs.filter((b) => dateKeyStockholm(b.created_at) === today).length;
+
+  const statusCount = (status: LeadStatus) => counts.get(status) ?? 0;
+  const ready = statusCount("ready") + statusCount("draft");
+  const waitingReply =
+    statusCount("sent") +
+    statusCount("opened") +
+    statusCount("engaged");
+  const positive =
+    statusCount("replied") +
+    statusCount("interested") +
+    statusCount("brief_sent") +
+    statusCount("client");
+  const clients = statusCount("client");
+  const lost = statusCount("lost");
+  const everSent = store.leads.filter((l) => Boolean(l.sent_at) || !["draft", "ready"].includes(l.status))
+    .length;
+
   const recentEvents = sortDescByDate(store.events).slice(0, 15);
   const organicBriefs = sortDescByDate(store.briefs.filter((b) => !b.lead_id)).slice(0, 10);
-  return { total, byStatus, recentEvents, organicBriefs };
+
+  return {
+    total,
+    byStatus,
+    recentEvents,
+    organicBriefs,
+    today,
+    createdToday,
+    sentToday,
+    briefsToday,
+    ready,
+    waitingReply,
+    positive,
+    clients,
+    lost,
+    everSent,
+  };
 }

@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { StatusGuide } from "@/components/admin/StatusGuide";
 import { LeadFilters } from "@/components/admin/LeadFilters";
+import { PipelineStats } from "@/components/admin/PipelineStats";
 import { getDashboardStats, listLeads, type LeadSort } from "@/lib/crm/leads";
 import type { LeadStatus } from "@/lib/crm/db";
 import { dashboardUrl, formatDate, LEAD_STATUSES } from "@/lib/crm/ui";
@@ -21,12 +22,15 @@ export default async function AdminDashboardPage({ searchParams }: Props) {
   const validSort = SORT_VALUES.includes(sortParam as LeadSort) ? (sortParam as LeadSort) : "updated";
 
   const stats = getDashboardStats();
-  const allLeads = listLeads();
   const leads = listLeads({ status: validStatus, q, sort: validSort });
-
-  const today = new Date().toISOString().slice(0, 10);
-  const sentToday = allLeads.filter((l) => l.sent_at?.startsWith(today)).length;
   const urlBase = { q, sort: validSort !== "updated" ? validSort : undefined };
+
+  const todayLabel = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/Stockholm",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(new Date());
 
   return (
     <div className="space-y-10">
@@ -34,7 +38,7 @@ export default async function AdminDashboardPage({ searchParams }: Props) {
         <div>
           <h1 className="font-display text-3xl font-bold uppercase tracking-[-0.02em]">Pipeline</h1>
           <p className="mt-2 text-sm text-text-secondary">
-            {stats.total} leads · {sentToday} marked sent today
+            Outreach pipeline — totals, today&apos;s activity, and lead list.
           </p>
         </div>
         <Link
@@ -44,6 +48,25 @@ export default async function AdminDashboardPage({ searchParams }: Props) {
           + New lead
         </Link>
       </div>
+
+      <PipelineStats
+        todayLabel={todayLabel}
+        cards={[
+          { label: "Total leads", value: stats.total, hint: "All time" },
+          { label: "Added today", value: stats.createdToday, hint: "New leads" },
+          { label: "Sent today", value: stats.sentToday, hint: "Marked sent" },
+          { label: "Ready", value: stats.ready, hint: "Draft + ready" },
+          { label: "Waiting", value: stats.waitingReply, hint: "Sent / opened / engaged" },
+          { label: "Wins", value: stats.positive, hint: "Reply → client" },
+        ]}
+      />
+
+      {(stats.clients > 0 || stats.briefsToday > 0 || stats.everSent > 0) && (
+        <p className="text-xs text-text-secondary">
+          {stats.everSent} ever sent · {stats.clients} clients · {stats.briefsToday} briefs today
+          {stats.lost > 0 ? ` · ${stats.lost} lost` : ""}
+        </p>
+      )}
 
       <StatusGuide />
 

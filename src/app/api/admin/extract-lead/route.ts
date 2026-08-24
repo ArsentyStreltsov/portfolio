@@ -30,7 +30,6 @@ async function fetchHtml(url: URL) {
     if (!res.ok) {
       throw new Error(`Fetch failed (${res.status})`);
     }
-    // Block SSRF via redirects to private hosts
     const finalUrl = new URL(res.url || url.toString());
     if (finalUrl.protocol !== "http:" && finalUrl.protocol !== "https:") {
       throw new Error("Only http(s) URLs allowed");
@@ -53,26 +52,55 @@ async function fetchHtml(url: URL) {
   }
 }
 
-function mergeExtract(primary: ExtractedLead, secondary: ExtractedLead): ExtractedLead {
+function samePage(a: string, b: string) {
+  try {
+    const ua = new URL(a);
+    const ub = new URL(b);
+    const pathA = ua.pathname.replace(/\/+$/, "") || "/";
+    const pathB = ub.pathname.replace(/\/+$/, "") || "/";
+    return (
+      ua.hostname.replace(/^www\./, "") === ub.hostname.replace(/^www\./, "") && pathA === pathB
+    );
+  } catch {
+    return a === b;
+  }
+}
+
+/** Prefer contact-page contact fields; keep home for business identity. */
+function mergePreferContact(home: ExtractedLead, contact: ExtractedLead): ExtractedLead {
   return {
-    business_name: primary.business_name || secondary.business_name,
-    contact_name: primary.contact_name || secondary.contact_name,
-    email: primary.email || secondary.email,
-    phone: primary.phone || secondary.phone,
-    website: primary.website,
-    notes: [primary.notes, secondary.notes !== primary.notes ? secondary.notes : ""]
+    business_name: home.business_name || contact.business_name,
+    contact_name: contact.contact_name || home.contact_name,
+    email: contact.email || home.email,
+    phone: contact.phone || home.phone,
+    website: contact.website || home.website,
+    notes: [home.notes, contact.notes !== home.notes ? contact.notes : ""]
       .filter(Boolean)
       .join("\n")
       .slice(0, 2000),
-    signals: [...new Set([...primary.signals, ...secondary.signals.map((s) => `contact: ${s}`)])],
-    contact_urls: [...new Set([...(primary.contact_urls ?? []), ...(secondary.contact_urls ?? [])])],
-    page_title: primary.page_title || secondary.page_title,
-    page_description: primary.page_description || secondary.page_description,
-    business_name_evidence: [...primary.business_name_evidence, ...secondary.business_name_evidence],
-    contact_name_evidence: [...primary.contact_name_evidence, ...secondary.contact_name_evidence],
-    email_evidence: [...primary.email_evidence, ...secondary.email_evidence],
-    phone_evidence: [...primary.phone_evidence, ...secondary.phone_evidence],
+    signals: [...new Set([...home.signals, ...contact.signals.map((s) => `contact: ${s}`)])],
+    contact_urls: [...new Set([...(home.contact_urls ?? []), ...(contact.contact_urls ?? [])])],
+    page_title: contact.page_title || home.page_title,
+    page_description: contact.page_description || home.page_description,
+    business_name_evidence: [...home.business_name_evidence, ...contact.business_name_evidence],
+    contact_name_evidence: [...contact.contact_name_evidence, ...home.contact_name_evidence],
+    email_evidence: [...contact.email_evidence, ...home.email_evidence],
+    phone_evidence: [...contact.phone_evidence, ...home.phone_evidence],
   };
+}
+
+function pickContactTarget(home: ExtractedLead, homeUrl: string, preferred?: string | null) {
+  const candidates = [preferred, ...(home.contact_urls ?? [])].filter((u): u is string => Boolean(u));
+
+  for (const candidate of candidates) {
+    try {
+      const target = normalizeWebsiteUrl(candidate);
+      if (!samePage(target.toString(), homeUrl)) return target;
+    } catch {
+      // skip invalid
+    }
+  }
+  return null;
 }
 
 export async function POST(request: NextRequest) {
@@ -84,47 +112,73 @@ export async function POST(request: NextRequest) {
   if (!limited.ok) return rateLimitResponse(limited.retryAfterSec);
 
   try {
-    const body = (await request.json()) as { url?: string; mode?: "home" | "contact"; target_url?: string };
+    const body = (await request.json()) as {
+      url?: string;
+      mode?: "home" | "contact";
+      target_url?: string;
+    };
     const url = normalizeWebsiteUrl(body.url ?? "");
-
     const mode = body.mode ?? "home";
+    const forceContact = mode === "contact";
+
     const first = await fetchHtml(url);
     let extracted = extractLeadFromHtml(first.html, first.finalUrl);
     let usedMode: "home" | "contact" = "home";
-    let triedContactPage = false;
+    let contactFetchedUrl: string | null = null;
+    let contactSkippedReason: string | null = null;
 
-    if (mode === "contact") {
-      const target = body.target_url
-        ? normalizeWebsiteUrl(body.target_url)
-        : extracted.contact_urls[0]
-          ? normalizeWebsiteUrl(extracted.contact_urls[0])
-          : null;
-      if (target && target.toString() !== first.finalUrl) {
-        const second = await fetchHtml(target);
-        extracted = mergeExtract(extracted, extractLeadFromHtml(second.html, second.finalUrl));
-        usedMode = "contact";
-        triedContactPage = true;
-      }
-    } else if ((!extracted.email || !extracted.phone) && extracted.contact_urls[0]) {
-      triedContactPage = true;
-      try {
-        const contactUrl = normalizeWebsiteUrl(extracted.contact_urls[0]!);
-        if (contactUrl.toString() !== first.finalUrl) {
-          const second = await fetchHtml(contactUrl);
-          extracted = mergeExtract(extracted, extractLeadFromHtml(second.html, second.finalUrl));
+    const missingContactFields = !extracted.email || !extracted.phone;
+    const shouldFetchContact = forceContact || missingContactFields;
+
+    if (shouldFetchContact) {
+      const target = pickContactTarget(extracted, first.finalUrl, body.target_url);
+      if (!target) {
+        contactSkippedReason = "No distinct contact page URL found";
+      } else {
+        try {
+          const second = await fetchHtml(target);
+          if (samePage(second.finalUrl, first.finalUrl)) {
+            contactSkippedReason = "Contact URL redirected to the same page";
+          } else {
+            const contactExtract = extractLeadFromHtml(second.html, second.finalUrl);
+            extracted = mergePreferContact(extracted, contactExtract);
+            contactFetchedUrl = second.finalUrl;
+            // Explicit button click always marks contact mode.
+            // Auto-enrich keeps usedMode=home so the button remains available.
+            if (forceContact) usedMode = "contact";
+          }
+        } catch (e) {
+          contactSkippedReason = e instanceof Error ? e.message : "Contact page fetch failed";
+          if (forceContact) {
+            return NextResponse.json(
+              { error: `Contact page failed: ${contactSkippedReason}` },
+              { status: 502 },
+            );
+          }
         }
-      } catch {
-        // contact page optional
+      }
+
+      if (forceContact && !contactFetchedUrl) {
+        return NextResponse.json(
+          { error: contactSkippedReason ?? "Could not open contact page" },
+          { status: 400 },
+        );
       }
     }
+
+    const hasDistinctContactUrl = (extracted.contact_urls ?? []).some(
+      (u) => !samePage(u, first.finalUrl),
+    );
 
     return NextResponse.json({
       ok: true,
       extracted,
       fetched_url: first.finalUrl,
+      contact_fetched_url: contactFetchedUrl,
       used_mode: usedMode,
-      can_retry_contact: Boolean(extracted.contact_urls[0] && usedMode !== "contact"),
-      retried_contact: triedContactPage && usedMode === "contact",
+      can_retry_contact: Boolean(hasDistinctContactUrl && usedMode !== "contact"),
+      retried_contact: usedMode === "contact",
+      contact_skipped_reason: contactSkippedReason,
     });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Extract failed";

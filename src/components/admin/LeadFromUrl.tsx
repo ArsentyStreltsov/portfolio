@@ -43,6 +43,8 @@ export function LeadFromUrl({ onExtracted }: { onExtracted: (data: ExtractPrefil
   const [attempts, setAttempts] = useState(0);
   const [usedMode, setUsedMode] = useState<"home" | "contact">("home");
   const [canRetryContact, setCanRetryContact] = useState(false);
+  const [contactFetchedUrl, setContactFetchedUrl] = useState<string | null>(null);
+  const [reviewUrl, setReviewUrl] = useState<string>("");
 
   const run = async (
     e: React.FormEvent | React.MouseEvent,
@@ -54,6 +56,9 @@ export function LeadFromUrl({ onExtracted }: { onExtracted: (data: ExtractPrefil
       setResult(null);
       setSignals([]);
       setAttempts(0);
+      setContactFetchedUrl(null);
+      setReviewUrl("");
+      setUsedMode("home");
     }
     setLoading(true);
     try {
@@ -67,6 +72,8 @@ export function LeadFromUrl({ onExtracted }: { onExtracted: (data: ExtractPrefil
         extracted?: ExtractResult;
         used_mode?: "home" | "contact";
         can_retry_contact?: boolean;
+        contact_fetched_url?: string | null;
+        fetched_url?: string;
       };
       if (!res.ok || !data.extracted) {
         setError(data.error ?? "Could not extract");
@@ -77,6 +84,12 @@ export function LeadFromUrl({ onExtracted }: { onExtracted: (data: ExtractPrefil
       setSignals(ex.signals ?? []);
       setUsedMode(data.used_mode ?? "home");
       setCanRetryContact(Boolean(data.can_retry_contact));
+      setContactFetchedUrl(data.contact_fetched_url ?? null);
+      setReviewUrl(
+        data.used_mode === "contact"
+          ? data.contact_fetched_url || ex.website || url
+          : data.fetched_url || ex.website || url,
+      );
       setAttempts((n) => n + 1);
     } catch {
       setError("Network error");
@@ -122,19 +135,26 @@ export function LeadFromUrl({ onExtracted }: { onExtracted: (data: ExtractPrefil
             <p>
               Reviewing:{" "}
               <a
-                href={result.website || url}
+                href={reviewUrl || result.website || url}
                 target="_blank"
                 rel="noreferrer"
                 className="font-mono underline hover:text-text"
               >
-                {result.website || url}
+                {reviewUrl || result.website || url}
               </a>
             </p>
             {result.page_title ? <p>Title: {result.page_title}</p> : null}
             {result.page_description ? <p>Description: {result.page_description}</p> : null}
             <p>
-              Attempt {attempts} · source page: {usedMode === "contact" ? "contact page" : "home page"}
+              Attempt {attempts} · source page:{" "}
+              {usedMode === "contact" ? "contact page" : "home page"}
+              {contactFetchedUrl && usedMode === "home"
+                ? " · also enriched from contact page"
+                : null}
             </p>
+            {usedMode === "contact" && contactFetchedUrl ? (
+              <p className="text-text">Loaded contact page: {contactFetchedUrl}</p>
+            ) : null}
           </div>
 
           <div className="grid gap-3 md:grid-cols-2">
@@ -162,7 +182,7 @@ export function LeadFromUrl({ onExtracted }: { onExtracted: (data: ExtractPrefil
               onClick={() =>
                 onExtracted({
                   business_name: result.business_name,
-                  website: result.website || "",
+                  website: url || result.website || "",
                   contact_name: result.contact_name,
                   email: result.email,
                   phone: result.phone,
@@ -183,9 +203,11 @@ export function LeadFromUrl({ onExtracted }: { onExtracted: (data: ExtractPrefil
                 {loading ? "Trying…" : "No, try contact page"}
               </button>
             ) : null}
-            {attempts >= 2 ? (
+            {attempts >= 2 || usedMode === "contact" ? (
               <span className="px-1 py-2 text-[0.7rem] text-text-secondary">
-                Tried twice — better fill the rest manually.
+                {usedMode === "contact"
+                  ? "Showing contact-page results — fill the rest manually if needed."
+                  : "Tried twice — better fill the rest manually."}
               </span>
             ) : null}
           </div>
@@ -204,7 +226,8 @@ function EvidenceCard({
   value: string | undefined;
   evidence: Evidence[];
 }) {
-  const top = evidence[0];
+  const selected =
+    evidence.find((item) => item.value.toLowerCase() === (value || "").toLowerCase()) ?? evidence[0];
 
   return (
     <div className="border border-border p-3">
@@ -212,11 +235,11 @@ function EvidenceCard({
         {label}
       </p>
       <p className="mt-1 text-sm">{value || "Not found"}</p>
-      {top ? (
+      {selected ? (
         <div className="mt-2 text-xs text-text-secondary">
-          <p>From: {top.source}</p>
-          <p className="mt-1 break-words font-mono text-[0.65rem]">{top.snippet}</p>
-          <p className="mt-1 break-all">{top.page_url}</p>
+          <p>From: {selected.source}</p>
+          <p className="mt-1 break-words font-mono text-[0.65rem]">{selected.snippet}</p>
+          <p className="mt-1 break-all">{selected.page_url}</p>
         </div>
       ) : null}
     </div>
