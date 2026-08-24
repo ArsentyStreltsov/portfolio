@@ -16,7 +16,7 @@ export function NewLeadForm() {
     email: "",
     phone: "",
     channel: "email",
-    status: "draft" as LeadStatus,
+    status: "ready" as LeadStatus,
     campaign: "se_websites_2026",
     subject_variant: "email_v1",
     notes: "",

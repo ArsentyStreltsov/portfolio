@@ -9,13 +9,13 @@ const GUIDE: {
 }[] = [
   {
     status: "draft",
-    meaning: "Lead created, not ready to email yet.",
-    when: "Default when you add a business.",
+    meaning: "Optional — rarely used.",
+    when: "You can still set it manually if needed.",
   },
   {
     status: "ready",
     meaning: "Ready to copy the link and send.",
-    when: "You set it manually before sending.",
+    when: "Default when you add a business.",
   },
   {
     status: "sent",

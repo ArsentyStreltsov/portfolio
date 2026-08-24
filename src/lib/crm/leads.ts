@@ -129,7 +129,7 @@ export function createLead(input: LeadInput) {
       email: input.email?.trim() || null,
       phone: input.phone?.trim() || null,
       channel: input.channel?.trim() || null,
-      status: input.status ?? "draft",
+      status: input.status ?? "ready",
       campaign,
       notes: input.notes?.trim() || null,
       created_at: ts,
@@ -154,6 +154,20 @@ export function createLead(input: LeadInput) {
   });
 
   return getLeadByLeadId(lead_id)!;
+}
+
+export function deleteLead(leadId: string) {
+  const existing = readStore().leads.find((l) => l.lead_id === leadId);
+  if (!existing) return false;
+
+  writeStore((store) => {
+    store.leads = store.leads.filter((l) => l.lead_id !== leadId);
+    store.touches = store.touches.filter((t) => t.lead_id !== leadId);
+    store.events = store.events.filter((e) => e.lead_id !== leadId);
+    store.briefs = store.briefs.filter((b) => b.lead_id !== leadId);
+  });
+
+  return true;
 }
 
 function appendEvent(

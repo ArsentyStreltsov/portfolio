@@ -22,6 +22,7 @@ type Props = {
 export function LeadEditor({ leadId, initial }: Props) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [form, setForm] = useState(initial);
 
   const save = async () => {
@@ -35,6 +36,25 @@ export function LeadEditor({ leadId, initial }: Props) {
       router.refresh();
     } finally {
       setSaving(false);
+    }
+  };
+
+  const remove = async () => {
+    const name = form.business_name || leadId;
+    if (!window.confirm(`Delete lead “${name}”? This cannot be undone.`)) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/admin/leads/${encodeURIComponent(leadId)}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        window.alert("Could not delete lead");
+        return;
+      }
+      router.push("/admin/dashboard");
+      router.refresh();
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -90,14 +110,24 @@ export function LeadEditor({ leadId, initial }: Props) {
         rows={5}
         className="w-full border border-border px-3 py-2 text-sm outline-none focus:border-text"
       />
-      <button
-        type="button"
-        onClick={save}
-        disabled={saving}
-        className="bg-text text-bg px-5 py-2.5 text-[0.7rem] font-semibold uppercase tracking-[0.12em] disabled:opacity-40"
-      >
-        {saving ? "Saving…" : "Save changes"}
-      </button>
+      <div className="flex flex-wrap items-center gap-3">
+        <button
+          type="button"
+          onClick={save}
+          disabled={saving || deleting}
+          className="bg-text text-bg px-5 py-2.5 text-[0.7rem] font-semibold uppercase tracking-[0.12em] disabled:opacity-40"
+        >
+          {saving ? "Saving…" : "Save changes"}
+        </button>
+        <button
+          type="button"
+          onClick={remove}
+          disabled={saving || deleting}
+          className="border border-red-300 px-5 py-2.5 text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-red-800 hover:border-red-700 disabled:opacity-40"
+        >
+          {deleting ? "Deleting…" : "Delete lead"}
+        </button>
+      </div>
     </div>
   );
 }
