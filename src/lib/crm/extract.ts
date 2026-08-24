@@ -29,6 +29,12 @@ const PHONE_RE =
   /(?:\+|00)?(?:46|45|47)?[\s.-]?(?:\(?0\)?[\s.-]?)?(?:\d[\s.-]?){6,12}\d/g;
 const JUNK_EMAIL = /noreply|no-reply|donotreply|example\.|sentry\.|wixpress|wordpress|cloudflare|schema\.org/i;
 const JUNK_PHONE_START = /^0{3,}|^12345/;
+const DATE_LIKE_RE = /\b\d{1,4}[./-]\d{1,2}[./-]\d{1,4}\b/;
+const PHONE_CONTEXT_RE = /telefon|phone|tel|ring|call|kontakta|kontakt|reach us|call us/i;
+const EMAIL_CONTEXT_RE = /email|e-post|maila|mail us|kontakt|contact/i;
+const FOOTER_HINT_RE = /footer|copyright|all rights reserved|opening hours|öppettider/i;
+
+type ScoredEvidence = ExtractEvidence & { score: number };
 
 function decodeHtml(s: string) {
   return s
@@ -175,8 +181,8 @@ function contactPageHints(html: string, baseUrl: string) {
     const href = m[1]!;
     const text = stripTags(m[2]!).toLowerCase();
     if (
-      /kontakt|contact|om-oss|about|impressum/i.test(href) ||
-      /kontakt|contact|om oss|about us/i.test(text)
+      /kontakt|kontakta|kontakta-oss|kontakta_oss|contact|om-oss|om_oss|about|impressum|hitta-hit/i.test(href) ||
+      /kontakt|kontakta oss|contact|om oss|about us|hitta hit/i.test(text)
     ) {
       try {
         contactish.push(new URL(href, baseUrl).toString());
@@ -186,6 +192,138 @@ function contactPageHints(html: string, baseUrl: string) {
     }
   }
   return [...new Set(contactish)].slice(0, 2);
+}
+
+function footerHtml(html: string) {
+  return html.match(/<footer[^>]*>([\s\S]*?)<\/footer>/i)?.[1] ?? "";
+}
+
+function scoreEmail(value: string, snippet: string, source: string) {
+  let score = 0;
+  const local = value.split("@")[0]?.toLowerCase() ?? "";
+  const s = snippet.toLowerCase();
+  if (/^info$|^kontakt$|^contact$|^hello$|^hej$|^office$/.test(local)) score += 8;
+  if (/info|kontakt|contact|hello|office|hej/.test(local)) score += 4;
+  if (/booking|book|reservation|reservations|boka|event|events|press|jobb|career|careers/.test(local)) score -= 5;
+  if (EMAIL_CONTEXT_RE.test(s)) score += 4;
+  if (/mailto:/i.test(source)) score += 2;
+  if (FOOTER_HINT_RE.test(s) || /footer/i.test(source)) score += 2;
+  return score;
+}
+
+function scorePhone(value: string, snippet: string, source: string) {
+  let score = 0;
+  const digits = value.replace(/[^\d]/g, "");
+  const s = snippet.toLowerCase();
+  if (digits.length >= 8 && digits.length <= 12) score += 3;
+  if (PHONE_CONTEXT_RE.test(s)) score += 6;
+  if (/tel:/i.test(source)) score += 2;
+  if (FOOTER_HINT_RE.test(s) || /footer/i.test(source)) score += 2;
+  return score;
+}
+
+function collectEmailEvidence(html: string, pageUrl: string, footer = "") {
+  const out: ScoredEvidence[] = [];
+  for (const m of html.matchAll(/mailto:([^"'?\s>]+)/gi)) {
+    const value = decodeURIComponent(m[1]!).split("?")[0]!.trim().toLowerCase();
+    if (!value || JUNK_EMAIL.test(value)) continue;
+    const snippet = clipSnippet(stripTags(html.slice(Math.max(0, m.index! - 80), m.index! + 120)));
+    out.push({
+      value,
+      source: "mailto link",
+      snippet,
+      page_url: pageUrl,
+      score: scoreEmail(value, snippet, "mailto"),
+    });
+  }
+  for (const m of html.matchAll(EMAIL_RE)) {
+    const value = m[0]!.toLowerCase();
+    if (!value || JUNK_EMAIL.test(value)) continue;
+    const snippet = clipSnippet(stripTags(html.slice(Math.max(0, m.index! - 80), m.index! + 120)));
+    out.push({
+      value,
+      source: "email in page text",
+      snippet,
+      page_url: pageUrl,
+      score: scoreEmail(value, snippet, "text"),
+    });
+  }
+  if (footer) {
+    for (const m of footer.matchAll(EMAIL_RE)) {
+      const value = m[0]!.toLowerCase();
+      if (!value || JUNK_EMAIL.test(value)) continue;
+      const snippet = clipSnippet(stripTags(footer.slice(Math.max(0, m.index! - 80), m.index! + 120)));
+      out.push({
+        value,
+        source: "footer email",
+        snippet,
+        page_url: pageUrl,
+        score: scoreEmail(value, snippet, "footer"),
+      });
+    }
+  }
+  return dedupeEvidence(out).sort((a, b) => b.score - a.score);
+}
+
+function collectPhoneEvidence(html: string, pageUrl: string, footer = "") {
+  const out: ScoredEvidence[] = [];
+  for (const m of html.matchAll(/tel:([^"'\s>]+)/gi)) {
+    const raw = decodeURIComponent(m[1]!).replace(/[^\d+]/g, "");
+    const value = normalizePhone(raw);
+    if (!value) continue;
+    const snippet = clipSnippet(stripTags(html.slice(Math.max(0, m.index! - 80), m.index! + 120)));
+    out.push({
+      value,
+      source: "tel link",
+      snippet,
+      page_url: pageUrl,
+      score: scorePhone(value, snippet, "tel"),
+    });
+  }
+  for (const m of html.matchAll(PHONE_RE)) {
+    const raw = m[0]!.trim();
+    if (DATE_LIKE_RE.test(raw)) continue;
+    const value = normalizePhone(raw);
+    if (!value) continue;
+    const snippet = clipSnippet(stripTags(html.slice(Math.max(0, m.index! - 80), m.index! + 120)));
+    if (DATE_LIKE_RE.test(snippet) && !PHONE_CONTEXT_RE.test(snippet)) continue;
+    out.push({
+      value,
+      source: "phone in page text",
+      snippet,
+      page_url: pageUrl,
+      score: scorePhone(value, snippet, "text"),
+    });
+  }
+  if (footer) {
+    for (const m of footer.matchAll(PHONE_RE)) {
+      const raw = m[0]!.trim();
+      if (DATE_LIKE_RE.test(raw)) continue;
+      const value = normalizePhone(raw);
+      if (!value) continue;
+      const snippet = clipSnippet(stripTags(footer.slice(Math.max(0, m.index! - 80), m.index! + 120)));
+      out.push({
+        value,
+        source: "footer phone",
+        snippet,
+        page_url: pageUrl,
+        score: scorePhone(value, snippet, "footer"),
+      });
+    }
+  }
+  return dedupeEvidence(out).sort((a, b) => b.score - a.score);
+}
+
+function dedupeEvidence(list: ScoredEvidence[]) {
+  const seen = new Set<string>();
+  const out: ScoredEvidence[] = [];
+  for (const item of list) {
+    const key = item.value.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(item);
+  }
+  return out;
 }
 
 export function extractLeadFromHtml(html: string, pageUrl: string): ExtractedLead {
@@ -210,6 +348,7 @@ export function extractLeadFromHtml(html: string, pageUrl: string): ExtractedLea
   const ogTitle = metaContent(html, "og:title");
   const siteName = metaContent(html, "og:site_name");
   const desc = metaContent(html, "description") || metaContent(html, "og:description");
+  const footer = footerHtml(html);
 
   if (org) {
     if (typeof org.name === "string" && org.name.trim()) {
@@ -283,28 +422,25 @@ export function extractLeadFromHtml(html: string, pageUrl: string): ExtractedLea
     noteBits.push(desc.slice(0, 280));
   }
 
-  const emails = pickEmails(html);
+  const emails = collectEmailEvidence(html, pageUrl, footer);
   if (!email && emails[0]) {
-    email = emails[0];
+    email = emails[0].value;
     signals.push("email on page");
   }
   for (const candidate of emails) {
-    const match = html.match(new RegExp(`.{0,60}${candidate.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}.{0,60}`, "i"));
-    pushEvidence(email_evidence, candidate, "Email found on page", match?.[0] ?? candidate, pageUrl);
+    pushEvidence(email_evidence, candidate.value, candidate.source, candidate.snippet, candidate.page_url);
   }
-  if (emails.length > 1) noteBits.push(`Other emails: ${emails.slice(1).join(", ")}`);
+  if (emails.length > 1) noteBits.push(`Other emails: ${emails.slice(1).map((e) => e.value).join(", ")}`);
 
-  const phones = pickPhones(html);
+  const phones = collectPhoneEvidence(html, pageUrl, footer);
   if (!phone && phones[0]) {
-    phone = phones[0];
+    phone = phones[0].value;
     signals.push("phone on page");
   }
   for (const candidate of phones) {
-    const escaped = candidate.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const match = html.match(new RegExp(`.{0,60}${escaped}.{0,60}`, "i"));
-    pushEvidence(phone_evidence, candidate, "Phone found on page", match?.[0] ?? candidate, pageUrl);
+    pushEvidence(phone_evidence, candidate.value, candidate.source, candidate.snippet, candidate.page_url);
   }
-  if (phones.length > 1) noteBits.push(`Other phones: ${phones.slice(1).join(", ")}`);
+  if (phones.length > 1) noteBits.push(`Other phones: ${phones.slice(1).map((p) => p.value).join(", ")}`);
 
   const contactLinks = contactPageHints(html, pageUrl);
   if (contactLinks.length) noteBits.push(`Contact pages: ${contactLinks.join(" · ")}`);
