@@ -34,7 +34,6 @@ export function NewLeadForm() {
     channel: "email",
     status: "ready" as LeadStatus,
     campaign: "se_websites_2026",
-    subject_variant: "cold_a",
     notes: "",
   });
 
@@ -209,26 +208,14 @@ export function NewLeadForm() {
             onChange={(v) => setForm({ ...form, channel: v })}
           />
         </div>
-        <div className="grid gap-6 sm:grid-cols-2">
-          <Field
-            label="Campaign"
-            value={form.campaign}
-            onChange={(v) => setForm({ ...form, campaign: v })}
-          />
-          <div>
-            <label className="block text-[0.75rem] font-medium uppercase tracking-[0.15em] text-text-secondary">
-              A/B variant (utm_content)
-            </label>
-            <select
-              value={form.subject_variant}
-              onChange={(e) => setForm({ ...form, subject_variant: e.target.value })}
-              className="mt-2 w-full border border-border bg-transparent px-3 py-2 text-sm outline-none focus:border-text"
-            >
-              <option value="cold_a">A — competitors subject</option>
-              <option value="cold_b">B — 67% subject</option>
-            </select>
-          </div>
-        </div>
+        <Field
+          label="Campaign"
+          value={form.campaign}
+          onChange={(v) => setForm({ ...form, campaign: v })}
+        />
+        <p className="text-xs text-text-secondary">
+          Cold email A/B is assigned automatically from the new lead id (odd → A, even → B).
+        </p>
 
         <div>
           <label className="block text-[0.75rem] font-medium uppercase tracking-[0.15em] text-text-secondary">
