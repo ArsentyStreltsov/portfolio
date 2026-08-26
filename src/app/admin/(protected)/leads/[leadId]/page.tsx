@@ -69,6 +69,7 @@ export default async function LeadDetailPage({ params }: Props) {
         businessName={lead.business_name}
         contactName={lead.contact_name}
         email={lead.email}
+        phone={lead.phone}
         campaign={lead.campaign}
         touches={touches}
       />

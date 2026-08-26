@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { CopyButton } from "@/components/admin/CopyButton";
 import {
   EMAIL_TEMPLATES,
+  coldAbVariantForLeadId,
   gmailComposeUrl,
   renderEmailTemplate,
   type EmailTemplateId,
@@ -18,10 +19,13 @@ type Touch = {
   sent_at: string | null;
 };
 
-function initialTemplate(touch?: Touch | null): EmailTemplateId {
+function initialTemplate(leadId: string, touch?: Touch | null): EmailTemplateId {
   const v = touch?.subject_variant;
-  if (v === "cold_a" || v === "cold_b" || v === "followup_v1") return v;
-  return "cold_a";
+  // Keep whatever was recorded when the email was marked sent
+  if (touch?.sent_at && (v === "cold_a" || v === "cold_b" || v === "followup_v1")) return v;
+  if (v === "followup_v1") return v;
+  // Auto A/B from lead id (odd → A, even → B)
+  return coldAbVariantForLeadId(leadId);
 }
 
 export function EmailDraft({
@@ -29,6 +33,7 @@ export function EmailDraft({
   businessName,
   contactName,
   email,
+  phone,
   campaign,
   touches,
 }: {
@@ -36,12 +41,16 @@ export function EmailDraft({
   businessName: string;
   contactName: string | null;
   email: string | null;
+  phone?: string | null;
   campaign: string | null;
   touches: Touch[];
 }) {
   const router = useRouter();
   const primaryTouch = touches[0];
-  const [templateId, setTemplateId] = useState<EmailTemplateId>(() => initialTemplate(primaryTouch));
+  const assignedAb = coldAbVariantForLeadId(leadId);
+  const [templateId, setTemplateId] = useState<EmailTemplateId>(() =>
+    initialTemplate(leadId, primaryTouch),
+  );
   const [marking, setMarking] = useState(false);
 
   const outreachUrl = useMemo(() => {
@@ -96,6 +105,8 @@ export function EmailDraft({
     );
   }
 
+  const assignedLabel = assignedAb === "cold_a" ? "A" : "B";
+
   return (
     <section className="border border-border p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -104,9 +115,9 @@ export function EmailDraft({
             Email draft
           </h2>
           <p className="mt-1 text-xs text-text-secondary">
-            A/B: switch variant — subject and body update together. The link stays short (
-            <span className="font-mono">?lead_id=…</span> only); the variant is saved when you mark
-            sent.
+            A/B assigned from lead id (odd → A, even → B):{" "}
+            <span className="font-semibold text-text">variant {assignedLabel}</span>. Subject and body
+            update with the template. Override below if needed; variant is saved when you mark sent.
           </p>
         </div>
         <select
@@ -117,20 +128,32 @@ export function EmailDraft({
           {EMAIL_TEMPLATES.map((t) => (
             <option key={t.id} value={t.id}>
               {t.label}
+              {t.id === assignedAb ? " · assigned" : ""}
             </option>
           ))}
         </select>
       </div>
 
       <div className="mt-4 space-y-3">
-        <div>
-          <div className="mb-1 flex items-center justify-between gap-2">
-            <span className="text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-text-secondary">
-              To
-            </span>
-            {email ? <CopyButton text={email} label="Copy email" /> : null}
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <div className="mb-1 flex items-center justify-between gap-2">
+              <span className="text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-text-secondary">
+                To
+              </span>
+              {email ? <CopyButton text={email} label="Copy email" /> : null}
+            </div>
+            <p className="text-sm">{email || "— add email on the lead first"}</p>
           </div>
-          <p className="text-sm">{email || "— add email on the lead first"}</p>
+          <div>
+            <div className="mb-1 flex items-center justify-between gap-2">
+              <span className="text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-text-secondary">
+                Phone
+              </span>
+              {phone ? <CopyButton text={phone} label="Copy phone" /> : null}
+            </div>
+            <p className="text-sm">{phone || "—"}</p>
+          </div>
         </div>
 
         <div>

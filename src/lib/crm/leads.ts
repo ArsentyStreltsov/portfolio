@@ -6,6 +6,7 @@ import {
   type LeadStatus,
   type TouchRow,
 } from "./db";
+import { coldAbVariantForLeadId } from "./email-templates";
 import { buildOutreachUrl } from "./links";
 import { generateLeadId, nextTouchId } from "./ids";
 import { nextRowId, readStore, writeStore } from "./store";
@@ -113,7 +114,8 @@ export function createLead(input: LeadInput) {
   const lead_id = generateLeadId();
   const ts = nowIso();
   const campaign = input.campaign ?? "se_websites_2026";
-  const subject_variant = input.subject_variant ?? "cold_a";
+  // Odd lead-id parity → A, even → B (client subject_variant ignored for cold A/B)
+  const subject_variant = coldAbVariantForLeadId(lead_id);
   const touch_id = nextTouchId(lead_id, 0);
   const outreach_url = buildOutreachUrl({
     leadId: lead_id,

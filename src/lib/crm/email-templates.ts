@@ -78,6 +78,18 @@ No worries if the timing isn’t right.
 
 export const COLD_AB_TEMPLATE_IDS: EmailTemplateId[] = ["cold_a", "cold_b"];
 
+/**
+ * Deterministic cold A/B from public lead id (e.g. L7K2P9).
+ * Odd parity → A (competitors), even → B (67% hook).
+ */
+export function coldAbVariantForLeadId(leadId: string): "cold_a" | "cold_b" {
+  let sum = 0;
+  for (let i = 0; i < leadId.length; i++) {
+    sum += leadId.charCodeAt(i);
+  }
+  return sum % 2 === 0 ? "cold_b" : "cold_a";
+}
+
 function applyVars(text: string, vars: Record<string, string>) {
   return text.replace(/\{\{(\w+)\}\}/g, (_, key: string) => vars[key] ?? "");
 }

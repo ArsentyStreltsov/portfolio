@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { CopyButton } from "@/components/admin/CopyButton";
 import type { LeadStatus } from "@/lib/crm/db";
 import { LEAD_STATUSES } from "@/lib/crm/ui";
 
@@ -59,6 +60,9 @@ export function LeadEditor({ leadId, initial }: Props) {
     }
   };
 
+  const emailValue = form.email?.trim() ?? "";
+  const phoneValue = form.phone?.trim() ?? "";
+
   return (
     <div className="space-y-4 border border-border p-5">
       <h2 className="text-[0.7rem] font-semibold uppercase tracking-[0.2em] text-text-secondary">Edit lead</h2>
@@ -80,18 +84,24 @@ export function LeadEditor({ leadId, initial }: Props) {
           onChange={(e) => setForm({ ...form, contact_name: e.target.value || null })}
           className="border border-border px-3 py-2 text-sm outline-none focus:border-text"
         />
-        <input
-          placeholder="Email"
-          value={form.email ?? ""}
-          onChange={(e) => setForm({ ...form, email: e.target.value || null })}
-          className="border border-border px-3 py-2 text-sm outline-none focus:border-text"
-        />
-        <input
-          placeholder="Phone"
-          value={form.phone ?? ""}
-          onChange={(e) => setForm({ ...form, phone: e.target.value || null })}
-          className="border border-border px-3 py-2 text-sm outline-none focus:border-text"
-        />
+        <div className="flex gap-2">
+          <input
+            placeholder="Email"
+            value={form.email ?? ""}
+            onChange={(e) => setForm({ ...form, email: e.target.value || null })}
+            className="min-w-0 flex-1 border border-border px-3 py-2 text-sm outline-none focus:border-text"
+          />
+          {emailValue ? <CopyButton text={emailValue} label="Copy" /> : null}
+        </div>
+        <div className="flex gap-2">
+          <input
+            placeholder="Phone"
+            value={form.phone ?? ""}
+            onChange={(e) => setForm({ ...form, phone: e.target.value || null })}
+            className="min-w-0 flex-1 border border-border px-3 py-2 text-sm outline-none focus:border-text"
+          />
+          {phoneValue ? <CopyButton text={phoneValue} label="Copy" /> : null}
+        </div>
         <input
           placeholder="Channel"
           value={form.channel ?? ""}
